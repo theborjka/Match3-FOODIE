@@ -210,9 +210,11 @@ namespace Match3FoodieEditor
             serializedSettings.FindProperty("fishRandomDelay").vector2Value = new Vector2(0f, 0.12f);
             serializedSettings.FindProperty("fishWaveAmplitude").floatValue = 0.18f;
             serializedSettings.FindProperty("fishWaveFrequency").floatValue = 7f;
+            serializedSettings.FindProperty("fishKeepBoardOrientation").boolValue = false;
             serializedSettings.FindProperty("fishFaceFlightDirection").boolValue = true;
-            serializedSettings.FindProperty("fishSpriteForwardAngle").floatValue = 0f;
+            serializedSettings.FindProperty("fishSpriteForwardAngle").floatValue = 180f;
             serializedSettings.FindProperty("fishMaxTiltAngle").floatValue = 35f;
+            serializedSettings.FindProperty("fishFlightSortingOrderBoost").intValue = 100;
             serializedSettings.FindProperty("defaultPiecePrefab").objectReferenceValue = prefab;
 
             var elementsProperty = serializedSettings.FindProperty("elements");

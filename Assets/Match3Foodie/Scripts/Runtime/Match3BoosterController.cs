@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -14,6 +15,91 @@ namespace Match3Foodie
     {
         [Serializable] public sealed class IntEvent : UnityEvent<int> { }
         [Serializable] public sealed class BoosterEvent : UnityEvent<Match3BoosterType> { }
+
+        [Serializable]
+        private sealed class BoosterButtonShaderVisual
+        {
+            [SerializeField] private Image buttonImage;
+
+            private Material originalMaterial;
+            private Material materialInstance;
+
+            public void Initialize()
+            {
+                if (buttonImage == null || materialInstance != null)
+                {
+                    return;
+                }
+
+                originalMaterial = buttonImage.material;
+                var sourceMaterial = buttonImage.material != null ? buttonImage.material : buttonImage.materialForRendering;
+                if (sourceMaterial == null)
+                {
+                    return;
+                }
+
+                materialInstance = UnityEngine.Object.Instantiate(sourceMaterial);
+                materialInstance.name = sourceMaterial.name + " (Booster Instance)";
+                buttonImage.material = materialInstance;
+            }
+
+            public void Apply(
+                bool selected,
+                string outlineFadeProperty,
+                float selectedOutlineFade,
+                float idleOutlineFade,
+                string enchantedFadeProperty,
+                float selectedEnchantedFade,
+                float idleEnchantedFade)
+            {
+                var material = GetMaterial();
+                if (material == null)
+                {
+                    return;
+                }
+
+                SetFloatIfPresent(material, outlineFadeProperty, selected ? selectedOutlineFade : idleOutlineFade);
+                SetFloatIfPresent(material, enchantedFadeProperty, selected ? selectedEnchantedFade : idleEnchantedFade);
+            }
+
+            public void Restore()
+            {
+                if (buttonImage != null)
+                {
+                    buttonImage.material = originalMaterial;
+                }
+
+                if (materialInstance == null)
+                {
+                    return;
+                }
+
+                if (Application.isPlaying)
+                {
+                    UnityEngine.Object.Destroy(materialInstance);
+                }
+                else
+                {
+                    UnityEngine.Object.DestroyImmediate(materialInstance);
+                }
+
+                materialInstance = null;
+                originalMaterial = null;
+            }
+
+            private Material GetMaterial()
+            {
+                return materialInstance != null ? materialInstance : buttonImage != null ? buttonImage.material : null;
+            }
+
+            private static void SetFloatIfPresent(Material material, string propertyName, float value)
+            {
+                if (!string.IsNullOrWhiteSpace(propertyName) && material.HasProperty(propertyName))
+                {
+                    material.SetFloat(propertyName, value);
+                }
+            }
+        }
 
         [Header("Source")]
         [SerializeField] private Match3Board board;
@@ -31,6 +117,17 @@ namespace Match3Foodie
         [SerializeField] private TMP_Text popAnyUsesText;
         [SerializeField] private TMP_Text popColorUsesText;
         [SerializeField] private TMP_Text randomWalkUsesText;
+
+        [Header("Selection Shader")]
+        [SerializeField] private BoosterButtonShaderVisual popAnyButtonVisual;
+        [SerializeField] private BoosterButtonShaderVisual popColorButtonVisual;
+        [SerializeField] private BoosterButtonShaderVisual randomWalkButtonVisual;
+        [SerializeField] private string outerOutlineFadeProperty = "_OuterOutlineFade";
+        [SerializeField] private float selectedOuterOutlineFade = 1f;
+        [SerializeField] private float idleOuterOutlineFade;
+        [SerializeField] private string enchantedFadeProperty = "_EnchantedFade";
+        [SerializeField] private float selectedEnchantedFade = 1f;
+        [SerializeField] private float idleEnchantedFade;
 
         [Header("Events")]
         [SerializeField] private BoosterEvent boosterActivated = new();
@@ -61,6 +158,8 @@ namespace Match3Foodie
             }
 
             RefreshUsesUI();
+            InitializeButtonVisuals();
+            RefreshButtonVisuals();
         }
 
         private void OnValidate()
@@ -70,6 +169,11 @@ namespace Match3Foodie
             randomWalkUses = Mathf.Max(0, randomWalkUses);
             randomWalkPieceCount = Mathf.Max(1, randomWalkPieceCount);
             RefreshUsesUI();
+
+            if (Application.isPlaying)
+            {
+                RefreshButtonVisuals();
+            }
         }
 
         private void Update()
@@ -123,6 +227,7 @@ namespace Match3Foodie
             var canceled = activeBooster;
             activeBooster = Match3BoosterType.None;
             board?.SetInputEnabled(true);
+            RefreshButtonVisuals();
             boosterCanceled.Invoke(canceled);
         }
 
@@ -156,6 +261,7 @@ namespace Match3Foodie
 
             activeBooster = boosterType;
             board.SetInputEnabled(false);
+            RefreshButtonVisuals();
             boosterActivated.Invoke(activeBooster);
         }
 
@@ -176,6 +282,7 @@ namespace Match3Foodie
             var used = activeBooster;
             activeBooster = Match3BoosterType.None;
             board.SetInputEnabled(true);
+            RefreshButtonVisuals();
             boosterUsed.Invoke(used);
         }
 
@@ -252,18 +359,51 @@ namespace Match3Foodie
         {
             if (popAnyUsesText != null)
             {
-                popAnyUsesText.text = popAnyUses.ToString();
+                popAnyUsesText.text = "x" + popAnyUses.ToString();
             }
 
             if (popColorUsesText != null)
             {
-                popColorUsesText.text = popColorUses.ToString();
+                popColorUsesText.text = "x" + popColorUses.ToString();
             }
 
             if (randomWalkUsesText != null)
             {
-                randomWalkUsesText.text = randomWalkUses.ToString();
+                randomWalkUsesText.text = "x" + randomWalkUses.ToString();
             }
+        }
+
+        private void InitializeButtonVisuals()
+        {
+            popAnyButtonVisual?.Initialize();
+            popColorButtonVisual?.Initialize();
+            randomWalkButtonVisual?.Initialize();
+        }
+
+        private void RefreshButtonVisuals()
+        {
+            ApplyButtonVisual(popAnyButtonVisual, activeBooster == Match3BoosterType.PopAnyPiece);
+            ApplyButtonVisual(popColorButtonVisual, activeBooster == Match3BoosterType.PopAllOfColor);
+            ApplyButtonVisual(randomWalkButtonVisual, activeBooster == Match3BoosterType.RandomWalk);
+        }
+
+        private void ApplyButtonVisual(BoosterButtonShaderVisual visual, bool selected)
+        {
+            visual?.Apply(
+                selected,
+                outerOutlineFadeProperty,
+                selectedOuterOutlineFade,
+                idleOuterOutlineFade,
+                enchantedFadeProperty,
+                selectedEnchantedFade,
+                idleEnchantedFade);
+        }
+
+        private void OnDestroy()
+        {
+            popAnyButtonVisual?.Restore();
+            popColorButtonVisual?.Restore();
+            randomWalkButtonVisual?.Restore();
         }
 
         private static bool TryGetPointerUp(out Vector2 screenPosition)

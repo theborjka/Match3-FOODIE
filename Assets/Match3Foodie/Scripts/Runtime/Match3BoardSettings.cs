@@ -47,9 +47,11 @@ namespace Match3Foodie
         [SerializeField, Min(0f)] private Vector2 fishRandomDelay = new(0f, 0.12f);
         [SerializeField, Min(0f)] private float fishWaveAmplitude = 0.18f;
         [SerializeField, Min(0f)] private float fishWaveFrequency = 7f;
+        [SerializeField] private bool fishKeepBoardOrientation;
         [SerializeField] private bool fishFaceFlightDirection = true;
-        [SerializeField] private float fishSpriteForwardAngle;
+        [SerializeField] private float fishSpriteForwardAngle = 180f;
         [SerializeField, Range(0f, 89f)] private float fishMaxTiltAngle = 35f;
+        [SerializeField, Min(0)] private int fishFlightSortingOrderBoost = 100;
 
         [SerializeField] private Match3PieceView defaultPiecePrefab;
         [SerializeField] private List<Match3ElementDefinition> elements = new();
@@ -87,9 +89,11 @@ namespace Match3Foodie
         public Vector2 FishRandomDelay => fishRandomDelay;
         public float FishWaveAmplitude => fishWaveAmplitude;
         public float FishWaveFrequency => fishWaveFrequency;
-        public bool FishFaceFlightDirection => fishFaceFlightDirection;
+        public bool FishKeepBoardOrientation => fishKeepBoardOrientation;
+        public bool FishFaceFlightDirection => fishFaceFlightDirection && !fishKeepBoardOrientation;
         public float FishSpriteForwardAngle => fishSpriteForwardAngle;
         public float FishMaxTiltAngle => fishMaxTiltAngle;
+        public int FishFlightSortingOrderBoost => fishFlightSortingOrderBoost;
         public Match3PieceView DefaultPiecePrefab => defaultPiecePrefab;
         public IReadOnlyList<Match3ElementDefinition> Elements => elements;
     }

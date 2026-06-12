@@ -17,6 +17,8 @@ namespace Match3Foodie
         private Vector3 baseScale;
         private Quaternion baseRotation;
         private bool baseFlipX;
+        private Vector3 baseLocalScale;
+        private int baseSortingOrder;
 
         public Match3ElementDefinition Definition { get; private set; }
         public Match3GridPosition GridPosition { get; private set; }
@@ -42,6 +44,7 @@ namespace Match3Foodie
             Definition = definition;
             GridPosition = gridPosition;
             baseScale = transform.localScale;
+            baseLocalScale = transform.localScale;
             baseRotation = transform.rotation;
 
             if (spriteRenderer == null)
@@ -52,6 +55,7 @@ namespace Match3Foodie
             if (spriteRenderer != null)
             {
                 baseFlipX = spriteRenderer.flipX;
+                baseSortingOrder = spriteRenderer.sortingOrder;
                 spriteRenderer.sprite = definition.Sprite;
                 spriteRenderer.color = definition.Tint;
             }
@@ -87,14 +91,14 @@ namespace Match3Foodie
             return motionRoutine;
         }
 
-        public Coroutine FlyFishTo(Vector3 worldPosition, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle)
+        public Coroutine FlyFishTo(Vector3 worldPosition, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle, int sortingOrderBoost)
         {
             if (motionRoutine != null)
             {
                 StopCoroutine(motionRoutine);
             }
 
-            motionRoutine = StartCoroutine(FishFlightRoutine(worldPosition, speed, waveAmplitude, waveFrequency, faceDirection, spriteForwardAngle, maxTiltAngle));
+            motionRoutine = StartCoroutine(FishFlightRoutine(worldPosition, speed, waveAmplitude, waveFrequency, faceDirection, spriteForwardAngle, maxTiltAngle, sortingOrderBoost));
             return motionRoutine;
         }
 
@@ -154,6 +158,7 @@ namespace Match3Foodie
         {
             transform.rotation = baseRotation;
             ResetSpriteFacing();
+            ResetSorting();
             var start = transform.position;
             var elapsed = 0f;
 
@@ -279,14 +284,19 @@ namespace Match3Foodie
             motionRoutine = null;
         }
 
-        private IEnumerator FishFlightRoutine(Vector3 target, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle)
+        private IEnumerator FishFlightRoutine(Vector3 target, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle, int sortingOrderBoost)
         {
+            transform.rotation = baseRotation;
+            ResetSpriteFacing();
+            SetSortingBoost(sortingOrderBoost);
+
             var start = transform.position;
             var delta = target - start;
             var distance = delta.magnitude;
             if (distance <= 0.001f)
             {
                 transform.position = target;
+                ResetSorting();
                 motionRoutine = null;
                 yield break;
             }
@@ -308,6 +318,7 @@ namespace Match3Foodie
             }
 
             transform.position = target;
+            ResetSorting();
             motionRoutine = null;
         }
 
@@ -315,20 +326,28 @@ namespace Match3Foodie
         {
             if (!faceDirection || direction.sqrMagnitude <= 0.0001f)
             {
+                transform.rotation = baseRotation;
                 ResetSpriteFacing();
                 return;
             }
 
-            var flipX = direction.x < -0.001f;
-            var uprightAngle = Mathf.Atan2(direction.y, Mathf.Max(Mathf.Abs(direction.x), 0.001f)) * Mathf.Rad2Deg;
-            uprightAngle = Mathf.Clamp(uprightAngle - spriteForwardAngle, -maxTiltAngle, maxTiltAngle);
+            var worldTargetAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            var baseWorldAngle = baseRotation.eulerAngles.z;
+            var localTargetAngle = Mathf.DeltaAngle(baseWorldAngle, worldTargetAngle);
 
+            var unflippedRotation = Mathf.DeltaAngle(spriteForwardAngle, localTargetAngle);
+            var flippedForwardAngle = 180f - spriteForwardAngle;
+            var flippedRotation = Mathf.DeltaAngle(flippedForwardAngle, localTargetAngle);
+            var useFlip = Mathf.Abs(flippedRotation) < Mathf.Abs(unflippedRotation);
+            var rotation = useFlip ? flippedRotation : unflippedRotation;
+
+            transform.localScale = baseLocalScale;
             if (spriteRenderer != null)
             {
-                spriteRenderer.flipX = flipX ? !baseFlipX : baseFlipX;
+                spriteRenderer.flipX = useFlip ? !baseFlipX : baseFlipX;
             }
 
-            transform.rotation = baseRotation * Quaternion.Euler(0f, 0f, uprightAngle);
+            transform.rotation = baseRotation * Quaternion.Euler(0f, 0f, rotation);
         }
 
         private void ResetSpriteFacing()
@@ -336,6 +355,24 @@ namespace Match3Foodie
             if (spriteRenderer != null)
             {
                 spriteRenderer.flipX = baseFlipX;
+            }
+
+            transform.localScale = baseLocalScale;
+        }
+
+        private void SetSortingBoost(int sortingOrderBoost)
+        {
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.sortingOrder = baseSortingOrder + sortingOrderBoost;
+            }
+        }
+
+        private void ResetSorting()
+        {
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.sortingOrder = baseSortingOrder;
             }
         }
 

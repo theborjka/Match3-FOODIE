@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Match3Foodie
 {
@@ -11,6 +12,7 @@ namespace Match3Foodie
 
         [Header("Timer")]
         [SerializeField] private TMP_Text timerText;
+        [SerializeField] private Image timerProgressImage;
 
         [Header("Goals")]
         [SerializeField] private Transform goalsRoot;
@@ -77,13 +79,17 @@ namespace Match3Foodie
 
         private void RefreshTimer(float remainingSeconds)
         {
-            if (timerText == null)
+            if (timerText != null)
             {
-                return;
+                var seconds = Mathf.CeilToInt(remainingSeconds);
+                timerText.text = seconds.ToString();
             }
 
-            var seconds = Mathf.CeilToInt(remainingSeconds);
-            timerText.text = seconds.ToString();
+            if (timerProgressImage != null && levelController != null && levelController.LevelSettings != null)
+            {
+                var timeLimit = Mathf.Max(0.01f, levelController.LevelSettings.TimeLimitSeconds);
+                timerProgressImage.fillAmount = Mathf.Clamp01(remainingSeconds / timeLimit);
+            }
         }
 
         private void RefreshGoals(List<Match3GoalProgress> goals)

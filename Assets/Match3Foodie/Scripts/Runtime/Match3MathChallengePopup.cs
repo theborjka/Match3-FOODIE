@@ -29,12 +29,13 @@ namespace Match3Foodie
         private Action<int> completed;
         private readonly List<Color> defaultButtonColors = new();
         private int correctAnswer;
-        private int questionIndex;
+        private int remainingQuestions;
         private int correctAnswers;
         private bool isOpen;
         private bool isWaitingForFeedback;
 
         public bool IsOpen => isOpen;
+        public int QuestionsPerGame => questionsPerGame;
 
         private void Awake()
         {
@@ -51,7 +52,7 @@ namespace Match3Foodie
             completed = onCompleted;
             isOpen = true;
             isWaitingForFeedback = false;
-            questionIndex = 0;
+            remainingQuestions = Mathf.Max(1, questionsPerGame);
             correctAnswers = 0;
 
             GenerateQuestion();
@@ -74,7 +75,6 @@ namespace Match3Foodie
 
         private void GenerateQuestion()
         {
-            questionIndex++;
             ResetButtonVisuals();
             SetButtonsInteractable(true);
 
@@ -142,6 +142,7 @@ namespace Match3Foodie
             {
                 correctAnswers++;
             }
+            remainingQuestions--;
 
             StartCoroutine(AnswerFeedbackRoutine(answer, wasCorrect));
         }
@@ -174,7 +175,7 @@ namespace Match3Foodie
 
             isWaitingForFeedback = false;
 
-            if (questionIndex < questionsPerGame)
+            if (remainingQuestions > 0)
             {
                 GenerateQuestion();
                 yield break;
@@ -195,6 +196,14 @@ namespace Match3Foodie
                     button.interactable = interactable;
                 }
             }
+        }
+
+        private void OnValidate()
+        {
+            minOperand = Mathf.Max(1, minOperand);
+            maxOperand = Mathf.Max(minOperand, maxOperand);
+            questionsPerGame = Mathf.Max(1, questionsPerGame);
+            answerFeedbackDelay = Mathf.Max(0f, answerFeedbackDelay);
         }
 
         private void ResetButtonVisuals()

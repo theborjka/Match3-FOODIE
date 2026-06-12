@@ -15,7 +15,7 @@ MonoBehaviour:
   width: 6
   height: 6
   cellSize: 0.7
-  gapSize: {x: 0.17, y: 0.17}
+  gapSize: {x: 0.165, y: 0.16}
   elementSize: 1.04
   swapDuration: 0.16
   shuffleDuration: 0.28
@@ -26,6 +26,11 @@ MonoBehaviour:
   refillRandomDelay: {x: 0, y: 0.12}
   refillSpawnScale: 0.72
   refillPopScale: 1.08
+  collectFlightSpeed: 12
+  collectExitDistance: 0.35
+  collectExitDuration: 0.12
+  collectArrivePopScale: 1.25
+  collectArrivePopDuration: 0.14
   avoidInitialMatches: 1
   allowInputWhileResolving: 0
   matchLines: 1
@@ -37,9 +42,11 @@ MonoBehaviour:
   fishRandomDelay: {x: 0, y: 0.12}
   fishWaveAmplitude: 0.33
   fishWaveFrequency: 0.64
+  fishKeepBoardOrientation: 0
   fishFaceFlightDirection: 1
   fishSpriteForwardAngle: 222
   fishMaxTiltAngle: 35
+  fishFlightSortingOrderBoost: 100
   defaultPiecePrefab: {fileID: 4110038014505568037, guid: c52a7611235a0464cb1fc06e99980f95, type: 3}
   elements:
   - {fileID: 11400000, guid: 428f34a50a21049e0b419e90da6471a6, type: 2}

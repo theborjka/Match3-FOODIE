@@ -473,6 +473,8 @@ namespace Match3Foodie
             SetSelectedPiece(null);
             pointerDownPiece = null;
 
+            yield return ResolveSpecialEffectsRoutine(clearSet);
+
             var clearedPieces = new List<Match3PieceView>(clearSet);
             piecesMatched.Invoke(clearedPieces);
 
@@ -502,6 +504,7 @@ namespace Match3Foodie
 
             ShuffleList(matchedPieces);
             var fishRoutines = new List<Coroutine>();
+            var mathBonusResolved = false;
             foreach (var piece in matchedPieces)
             {
                 if (piece == null || piece.Definition == null)
@@ -529,6 +532,12 @@ namespace Match3Foodie
 
                 if (piece.Definition.SpecialEffectType == Match3SpecialEffectType.MathBonus)
                 {
+                    if (mathBonusResolved)
+                    {
+                        continue;
+                    }
+
+                    mathBonusResolved = true;
                     yield return ResolveMathBonusEffectRoutine(piece.Definition);
                 }
             }
@@ -559,7 +568,8 @@ namespace Match3Foodie
                 settings.FishWaveFrequency,
                 settings.FishFaceFlightDirection,
                 settings.FishSpriteForwardAngle,
-                settings.FishMaxTiltAngle);
+                settings.FishMaxTiltAngle,
+                settings.FishFlightSortingOrderBoost);
 
             yield return new WaitForSeconds(duration);
             ClearPieceFromGrid(fishPiece);
