@@ -23,6 +23,8 @@ namespace Match3Foodie
         [SerializeField, Min(0f)] private Vector2 refillRandomDelay = new(0f, 0.12f);
         [SerializeField, Min(0.01f)] private float refillSpawnScale = 0.72f;
         [SerializeField, Min(1f)] private float refillPopScale = 1.08f;
+        [SerializeField, Min(0f)] private float fallImpactBounceDistance = 0.045f;
+        [SerializeField, Min(0f)] private float fallImpactBounceDuration = 0.07f;
 
         [Header("Collection")]
         [SerializeField, Min(0.01f)] private float collectFlightSpeed = 12f;
@@ -73,6 +75,8 @@ namespace Match3Foodie
         public Vector2 RefillRandomDelay => refillRandomDelay;
         public float RefillSpawnScale => refillSpawnScale;
         public float RefillPopScale => refillPopScale;
+        public float FallImpactBounceDistance => fallImpactBounceDistance;
+        public float FallImpactBounceDuration => fallImpactBounceDuration;
         public float CollectFlightSpeed => collectFlightSpeed;
         public float CollectExitDistance => collectExitDistance;
         public float CollectExitDuration => collectExitDuration;

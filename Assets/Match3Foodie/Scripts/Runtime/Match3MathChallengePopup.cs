@@ -10,11 +10,20 @@ namespace Match3Foodie
 {
     public sealed class Match3MathChallengePopup : MonoBehaviour
     {
+        private enum RewardVfxSpace
+        {
+            World,
+            Ui,
+        }
+
         [Header("UI")]
         [SerializeField] private GameObject root;
+        [SerializeField] private RectTransform animatedPanel;
+        [SerializeField] private CanvasGroup canvasGroup;
         [SerializeField] private TMP_Text questionText;
         [SerializeField] private Button[] answerButtons = new Button[3];
         [SerializeField] private TMP_Text[] answerTexts = new TMP_Text[3];
+        [SerializeField] private TMP_Text rewardAnnouncerText;
 
         [Header("Question")]
         [SerializeField, Min(1)] private int minOperand = 1;
@@ -26,13 +35,37 @@ namespace Match3Foodie
         [SerializeField] private Color correctGlowColor = new(0.25f, 1f, 0.35f, 1f);
         [SerializeField] private Color wrongGlowColor = new(1f, 0.18f, 0.12f, 1f);
 
+        [Header("Motion")]
+        [SerializeField, Min(0f)] private float showDuration = 0.24f;
+        [SerializeField, Min(0f)] private float hideDuration = 0.14f;
+        [SerializeField, Range(0.1f, 1f)] private float hiddenScale = 0.82f;
+
+        [Header("Reward Announcer")]
+        [SerializeField] private string rewardTextFormat = "+{0:0}s";
+        [SerializeField, Min(0f)] private float rewardShowDuration = 0.24f;
+        [SerializeField, Min(0f)] private float rewardHoldDuration = 0.45f;
+        [SerializeField, Min(0f)] private float rewardHideDuration = 0.16f;
+        [SerializeField, Min(1f)] private float rewardPopScale = 1.14f;
+        [SerializeField] private GameObject rewardVfxPrefab;
+        [SerializeField] private RewardVfxSpace rewardVfxSpace = RewardVfxSpace.World;
+        [SerializeField] private RectTransform rewardVfxParent;
+        [SerializeField] private Camera rewardWorldVfxCamera;
+        [SerializeField, Min(0.01f)] private float rewardWorldVfxCameraDistance = 10f;
+        [SerializeField] private Vector3 rewardWorldVfxOffset;
+        [SerializeField] private string rewardVfxSortingLayerName;
+        [SerializeField] private int rewardVfxSortingOrder = 500;
+        [SerializeField, Min(0f)] private float rewardVfxLifetime = 1.5f;
+
         private Action<int> completed;
         private readonly List<Color> defaultButtonColors = new();
         private int correctAnswer;
         private int remainingQuestions;
         private int correctAnswers;
+        private float rewardSecondsPerCorrectAnswer;
         private bool isOpen;
         private bool isWaitingForFeedback;
+        private Coroutine motionRoutine;
+        private Coroutine rewardRoutine;
 
         public bool IsOpen => isOpen;
         public int QuestionsPerGame => questionsPerGame;
@@ -49,18 +82,27 @@ namespace Match3Foodie
 
         public void Show(Action<int> onCompleted)
         {
+            Show(0f, onCompleted);
+        }
+
+        public void Show(float rewardSecondsPerCorrectAnswer, Action<int> onCompleted)
+        {
             completed = onCompleted;
+            this.rewardSecondsPerCorrectAnswer = Mathf.Max(0f, rewardSecondsPerCorrectAnswer);
             isOpen = true;
             isWaitingForFeedback = false;
             remainingQuestions = Mathf.Max(1, questionsPerGame);
             correctAnswers = 0;
 
-            GenerateQuestion();
-
             if (root != null)
             {
                 root.SetActive(true);
             }
+
+            PrepareMotionTargets();
+            HideRewardAnnouncer(true);
+            GenerateQuestion();
+            PlayShowMotion();
         }
 
         public void Hide()
@@ -71,6 +113,8 @@ namespace Match3Foodie
             {
                 root.SetActive(false);
             }
+
+            HideRewardAnnouncer(true);
         }
 
         private void GenerateQuestion()
@@ -141,6 +185,7 @@ namespace Match3Foodie
             if (wasCorrect)
             {
                 correctAnswers++;
+                PlayRewardAnnouncer();
             }
             remainingQuestions--;
 
@@ -183,7 +228,7 @@ namespace Match3Foodie
 
             var callback = completed;
             completed = null;
-            Hide();
+            yield return HideWithMotionRoutine();
             callback?.Invoke(correctAnswers);
         }
 
@@ -204,6 +249,14 @@ namespace Match3Foodie
             maxOperand = Mathf.Max(minOperand, maxOperand);
             questionsPerGame = Mathf.Max(1, questionsPerGame);
             answerFeedbackDelay = Mathf.Max(0f, answerFeedbackDelay);
+            showDuration = Mathf.Max(0f, showDuration);
+            hideDuration = Mathf.Max(0f, hideDuration);
+            rewardShowDuration = Mathf.Max(0f, rewardShowDuration);
+            rewardHoldDuration = Mathf.Max(0f, rewardHoldDuration);
+            rewardHideDuration = Mathf.Max(0f, rewardHideDuration);
+            rewardPopScale = Mathf.Max(1f, rewardPopScale);
+            rewardWorldVfxCameraDistance = Mathf.Max(0.01f, rewardWorldVfxCameraDistance);
+            rewardVfxLifetime = Mathf.Max(0f, rewardVfxLifetime);
         }
 
         private void ResetButtonVisuals()
@@ -247,6 +300,302 @@ namespace Match3Foodie
                 && index < answerTexts.Length
                 && answerTexts[index] != null
                 && int.TryParse(answerTexts[index].text, out answer);
+        }
+
+        private void PrepareMotionTargets()
+        {
+            if (animatedPanel == null && root != null)
+            {
+                animatedPanel = root.transform as RectTransform;
+            }
+
+            if (canvasGroup == null && root != null)
+            {
+                canvasGroup = root.GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                {
+                    canvasGroup = root.AddComponent<CanvasGroup>();
+                }
+            }
+        }
+
+        private void PlayRewardAnnouncer()
+        {
+            if (rewardAnnouncerText == null)
+            {
+                return;
+            }
+
+            HideRewardAnnouncer(true);
+            rewardAnnouncerText.text = rewardSecondsPerCorrectAnswer > 0f
+                ? string.Format(rewardTextFormat, rewardSecondsPerCorrectAnswer)
+                : "Correct!";
+            rewardAnnouncerText.gameObject.SetActive(true);
+            SpawnRewardVfx();
+            rewardRoutine = StartCoroutine(RewardAnnouncerRoutine());
+        }
+
+        private IEnumerator RewardAnnouncerRoutine()
+        {
+            var transformToAnimate = rewardAnnouncerText.transform;
+            var elapsed = 0f;
+
+            while (elapsed < rewardShowDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = rewardShowDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / rewardShowDuration);
+                var scale = Mathf.LerpUnclamped(0f, rewardPopScale, EaseOutBack(t));
+                transformToAnimate.localScale = Vector3.one * scale;
+                yield return null;
+            }
+
+            transformToAnimate.localScale = Vector3.one;
+
+            if (rewardHoldDuration > 0f)
+            {
+                yield return new WaitForSecondsRealtime(rewardHoldDuration);
+            }
+
+            elapsed = 0f;
+            while (elapsed < rewardHideDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = rewardHideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / rewardHideDuration);
+                transformToAnimate.localScale = Vector3.one * Mathf.Lerp(1f, 0f, t);
+                yield return null;
+            }
+
+            HideRewardAnnouncer(false);
+            rewardRoutine = null;
+        }
+
+        private void HideRewardAnnouncer(bool stopRoutines)
+        {
+            if (stopRoutines && rewardRoutine != null)
+            {
+                StopCoroutine(rewardRoutine);
+                rewardRoutine = null;
+            }
+
+            if (rewardAnnouncerText == null)
+            {
+                return;
+            }
+
+            rewardAnnouncerText.transform.localScale = Vector3.zero;
+            rewardAnnouncerText.gameObject.SetActive(false);
+        }
+
+        private void SpawnRewardVfx()
+        {
+            if (rewardVfxPrefab == null || rewardAnnouncerText == null)
+            {
+                return;
+            }
+
+            var instance = rewardVfxSpace == RewardVfxSpace.Ui
+                ? SpawnRewardUiVfx()
+                : SpawnRewardWorldVfx();
+
+            if (instance == null)
+            {
+                return;
+            }
+
+            instance.SetActive(true);
+            PlayRewardVfx(instance);
+
+            if (rewardVfxLifetime > 0f)
+            {
+                Destroy(instance, rewardVfxLifetime);
+            }
+        }
+
+        private GameObject SpawnRewardUiVfx()
+        {
+            var parent = ResolveRewardVfxParent();
+            var instance = parent != null
+                ? Instantiate(rewardVfxPrefab, parent, false)
+                : Instantiate(rewardVfxPrefab);
+
+            instance.transform.SetAsLastSibling();
+
+            if (instance.transform is RectTransform rectTransform && rewardAnnouncerText.transform is RectTransform announcerRect)
+            {
+                PlaceRewardVfxRect(rectTransform, announcerRect, parent);
+                rectTransform.localRotation = Quaternion.identity;
+                rectTransform.localScale = Vector3.one;
+            }
+
+            return instance;
+        }
+
+        private GameObject SpawnRewardWorldVfx()
+        {
+            var camera = ResolveRewardWorldVfxCamera();
+            if (camera == null)
+            {
+                Debug.LogWarning("Reward world VFX needs a camera. Assign Reward World Vfx Camera or tag your main camera as MainCamera.", this);
+                return null;
+            }
+
+            var instance = Instantiate(rewardVfxPrefab);
+            var screenPosition = RectTransformUtility.WorldToScreenPoint(GetRewardTextCanvasCamera(), rewardAnnouncerText.transform.position);
+            var worldPosition = camera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, rewardWorldVfxCameraDistance));
+            instance.transform.position = worldPosition + rewardWorldVfxOffset;
+            instance.transform.rotation = camera.transform.rotation;
+            ApplyRewardVfxSorting(instance);
+            return instance;
+        }
+
+        private RectTransform ResolveRewardVfxParent()
+        {
+            if (rewardVfxParent != null)
+            {
+                return rewardVfxParent;
+            }
+
+            if (rewardAnnouncerText.transform.parent is RectTransform textParent)
+            {
+                return textParent;
+            }
+
+            return root != null ? root.transform as RectTransform : null;
+        }
+
+        private static void PlaceRewardVfxRect(RectTransform vfxRect, RectTransform announcerRect, RectTransform parent)
+        {
+            if (parent == null || parent == announcerRect.parent)
+            {
+                vfxRect.anchoredPosition = announcerRect.anchoredPosition;
+                return;
+            }
+
+            var canvas = parent.GetComponentInParent<Canvas>();
+            var camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+            var screenPosition = RectTransformUtility.WorldToScreenPoint(camera, announcerRect.position);
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, screenPosition, camera, out var localPosition))
+            {
+                vfxRect.anchoredPosition = localPosition;
+            }
+        }
+
+        private static void PlayRewardVfx(GameObject instance)
+        {
+            var particleSystems = instance.GetComponentsInChildren<ParticleSystem>(true);
+            foreach (var particleSystem in particleSystems)
+            {
+                particleSystem.Clear(true);
+                particleSystem.Play(true);
+            }
+        }
+
+        private Camera ResolveRewardWorldVfxCamera()
+        {
+            if (rewardWorldVfxCamera != null)
+            {
+                return rewardWorldVfxCamera;
+            }
+
+            return Camera.main;
+        }
+
+        private Camera GetRewardTextCanvasCamera()
+        {
+            var canvas = rewardAnnouncerText != null ? rewardAnnouncerText.GetComponentInParent<Canvas>() : null;
+            return canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+        }
+
+        private void ApplyRewardVfxSorting(GameObject instance)
+        {
+            var renderers = instance.GetComponentsInChildren<ParticleSystemRenderer>(true);
+            foreach (var renderer in renderers)
+            {
+                if (!string.IsNullOrWhiteSpace(rewardVfxSortingLayerName))
+                {
+                    renderer.sortingLayerName = rewardVfxSortingLayerName;
+                }
+
+                renderer.sortingOrder = rewardVfxSortingOrder;
+            }
+        }
+
+        private void PlayShowMotion()
+        {
+            if (motionRoutine != null)
+            {
+                StopCoroutine(motionRoutine);
+            }
+
+            motionRoutine = StartCoroutine(ShowMotionRoutine());
+        }
+
+        private IEnumerator ShowMotionRoutine()
+        {
+            PrepareMotionTargets();
+
+            if (showDuration <= 0f)
+            {
+                ApplyMotionState(1f, 1f);
+                motionRoutine = null;
+                yield break;
+            }
+
+            var elapsed = 0f;
+            while (elapsed < showDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = Mathf.Clamp01(elapsed / showDuration);
+                ApplyMotionState(EaseOutBack(t), t);
+                yield return null;
+            }
+
+            ApplyMotionState(1f, 1f);
+            motionRoutine = null;
+        }
+
+        private IEnumerator HideWithMotionRoutine()
+        {
+            if (motionRoutine != null)
+            {
+                StopCoroutine(motionRoutine);
+                motionRoutine = null;
+            }
+
+            if (hideDuration > 0f)
+            {
+                var elapsed = 0f;
+                while (elapsed < hideDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    var t = Mathf.Clamp01(elapsed / hideDuration);
+                    ApplyMotionState(1f - t, 1f - t);
+                    yield return null;
+                }
+            }
+
+            Hide();
+        }
+
+        private void ApplyMotionState(float scaleAmount, float alpha)
+        {
+            if (animatedPanel != null)
+            {
+                var scale = Mathf.LerpUnclamped(hiddenScale, 1f, scaleAmount);
+                animatedPanel.localScale = Vector3.one * scale;
+            }
+
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = Mathf.Clamp01(alpha);
+            }
+        }
+
+        private static float EaseOutBack(float t)
+        {
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1f;
+            return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
         }
     }
 }

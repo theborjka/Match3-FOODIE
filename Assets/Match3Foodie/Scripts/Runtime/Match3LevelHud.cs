@@ -20,6 +20,9 @@ namespace Match3Foodie
         [SerializeField] private List<Match3GoalItemView> goalViews = new();
         [SerializeField] private Match3CollectionTargetProvider collectionTargetProvider;
 
+        [Header("Math Bonus")]
+        [SerializeField] private TMP_Text mathBonusCounterText;
+
         private void Awake()
         {
             if (levelController == null)
@@ -47,6 +50,7 @@ namespace Match3Foodie
 
             levelController.TimerChanged.AddListener(RefreshTimer);
             levelController.GoalsChanged.AddListener(RefreshGoals);
+            levelController.MathBonusCounterChanged.AddListener(RefreshMathBonusCounter);
             RefreshAll();
         }
 
@@ -64,6 +68,7 @@ namespace Match3Foodie
 
             levelController.TimerChanged.RemoveListener(RefreshTimer);
             levelController.GoalsChanged.RemoveListener(RefreshGoals);
+            levelController.MathBonusCounterChanged.RemoveListener(RefreshMathBonusCounter);
         }
 
         public void RefreshAll()
@@ -75,6 +80,7 @@ namespace Match3Foodie
 
             RefreshTimer(levelController.RemainingTime);
             RefreshGoals(new List<Match3GoalProgress>(levelController.Goals));
+            RefreshMathBonusCounter(levelController.MathBonusCollectedAmount, levelController.MathBonusRequiredCollections);
         }
 
         private void RefreshTimer(float remainingSeconds)
@@ -121,6 +127,23 @@ namespace Match3Foodie
                     collectionTargetProvider.SetTarget(goals[i].Element, goalViews[i]);
                 }
             }
+        }
+
+        private void RefreshMathBonusCounter(int collectedAmount, int requiredAmount)
+        {
+            if (mathBonusCounterText == null)
+            {
+                return;
+            }
+
+            var active = levelController != null && levelController.MathBonusElement != null && requiredAmount > 0;
+            mathBonusCounterText.gameObject.SetActive(active);
+            if (!active)
+            {
+                return;
+            }
+
+            mathBonusCounterText.text = $"{Mathf.Clamp(collectedAmount, 0, requiredAmount)}/{Mathf.Max(1, requiredAmount)}";
         }
 
         private Match3GoalItemView CreateGoalView()

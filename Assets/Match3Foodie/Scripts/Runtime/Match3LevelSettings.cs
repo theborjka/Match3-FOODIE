@@ -24,8 +24,19 @@ namespace Match3Foodie
         [Header("Shopping List")]
         [SerializeField] private List<Goal> goals = new();
 
+        [Header("Math Bonus")]
+        [Tooltip("Dorblue element. Optional: leave empty to use the first Board Settings element marked as Special Effect Type = MathBonus.")]
+        [SerializeField] private Match3ElementDefinition mathBonusElement;
+        [Tooltip("How many Dorblue collections fill the math counter before the popup starts.")]
+        [SerializeField, Min(1)] private int mathBonusRequiredCollections = 5;
+        [Tooltip("Delay after the board fully finishes resolving matches before the math popup opens.")]
+        [SerializeField, Min(0f)] private float mathChallengeStartDelay = 0.5f;
+
         public float TimeLimitSeconds => timeLimitSeconds;
         public bool FailWhenTimerEnds => failWhenTimerEnds;
         public IReadOnlyList<Goal> Goals => goals;
+        public Match3ElementDefinition MathBonusElement => mathBonusElement;
+        public int MathBonusRequiredCollections => mathBonusRequiredCollections;
+        public float MathChallengeStartDelay => mathChallengeStartDelay;
     }
 }

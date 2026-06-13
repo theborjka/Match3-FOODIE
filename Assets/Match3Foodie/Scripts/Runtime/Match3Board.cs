@@ -21,8 +21,6 @@ namespace Match3Foodie
         [Header("Config")]
         [SerializeField] private Match3BoardSettings settings;
         [SerializeField] private Transform piecesRoot;
-        [SerializeField] private Match3LevelController levelController;
-        [SerializeField] private Match3MathChallengePopup mathChallengePopup;
         [SerializeField] private Match3CollectionTargetProvider collectionTargetProvider;
 
         [Header("Input")]
@@ -43,7 +41,6 @@ namespace Match3Foodie
         private Match3PieceView pointerDownPiece;
         private Vector3 pointerDownWorld;
         private readonly HashSet<Match3PieceView> specialClearedPieces = new();
-        private float specialClearVisualDuration;
         private bool isResolving;
         private int totalSpawnWeight;
 
@@ -457,8 +454,8 @@ namespace Match3Foodie
             var matchedPieces = new List<Match3PieceView>(matches);
             piecesMatched.Invoke(matchedPieces);
 
-                yield return new WaitForSeconds(settings.ClearDelay);
                 yield return ClearPiecesRoutine(matchedPieces);
+                yield return new WaitForSeconds(settings.ClearDelay);
                 yield return CollapseColumnsRoutine();
                 yield return new WaitForSeconds(settings.RefillDelay);
                 yield return RefillColumnsRoutine();
@@ -479,6 +476,7 @@ namespace Match3Foodie
             piecesMatched.Invoke(clearedPieces);
 
             yield return ClearPiecesRoutine(clearedPieces);
+            yield return new WaitForSeconds(settings.ClearDelay);
             yield return CollapseColumnsRoutine();
             yield return new WaitForSeconds(settings.RefillDelay);
             yield return RefillColumnsRoutine();
@@ -504,7 +502,6 @@ namespace Match3Foodie
 
             ShuffleList(matchedPieces);
             var fishRoutines = new List<Coroutine>();
-            var mathBonusResolved = false;
             foreach (var piece in matchedPieces)
             {
                 if (piece == null || piece.Definition == null)
@@ -521,25 +518,6 @@ namespace Match3Foodie
             foreach (var routine in fishRoutines)
             {
                 yield return routine;
-            }
-
-            foreach (var piece in matchedPieces)
-            {
-                if (piece == null || piece.Definition == null)
-                {
-                    continue;
-                }
-
-                if (piece.Definition.SpecialEffectType == Match3SpecialEffectType.MathBonus)
-                {
-                    if (mathBonusResolved)
-                    {
-                        continue;
-                    }
-
-                    mathBonusResolved = true;
-                    yield return ResolveMathBonusEffectRoutine(piece.Definition);
-                }
             }
         }
 
@@ -574,7 +552,7 @@ namespace Match3Foodie
             yield return new WaitForSeconds(duration);
             ClearPieceFromGrid(fishPiece);
             specialClearedPieces.Add(fishPiece);
-            specialClearVisualDuration = Mathf.Max(specialClearVisualDuration, StartClearVisual(fishPiece));
+            StartClearVisual(fishPiece);
 
             ClearPieceFromGrid(target);
 
@@ -586,7 +564,7 @@ namespace Match3Foodie
             }
 
             specialClearedPieces.Add(target);
-            specialClearVisualDuration = Mathf.Max(specialClearVisualDuration, StartClearVisual(target));
+            StartClearVisual(target);
         }
 
         private static void ShuffleList<T>(IList<T> list)
@@ -595,47 +573,6 @@ namespace Match3Foodie
             {
                 var randomIndex = Random.Range(0, i + 1);
                 (list[i], list[randomIndex]) = (list[randomIndex], list[i]);
-            }
-        }
-
-        private IEnumerator ResolveMathBonusEffectRoutine(Match3ElementDefinition definition)
-        {
-            if (mathChallengePopup == null)
-            {
-                mathChallengePopup = FindAnyObjectByType<Match3MathChallengePopup>();
-            }
-
-            if (levelController == null)
-            {
-                levelController = FindAnyObjectByType<Match3LevelController>();
-            }
-
-            if (mathChallengePopup == null)
-            {
-                yield break;
-            }
-
-            var timerWasRunning = levelController != null && levelController.IsTimerRunning;
-            levelController?.PauseTimer();
-
-            var answered = false;
-            var correctAnswers = 0;
-            mathChallengePopup.Show(count =>
-            {
-                answered = true;
-                correctAnswers = count;
-            });
-
-            yield return new WaitUntil(() => answered);
-
-            if (correctAnswers > 0)
-            {
-                levelController?.AddTime(definition.MathBonusSeconds * correctAnswers);
-            }
-
-            if (timerWasRunning)
-            {
-                levelController?.ResumeTimer();
             }
         }
 
@@ -744,7 +681,6 @@ namespace Match3Foodie
 
         private IEnumerator ClearPiecesRoutine(List<Match3PieceView> matchedPieces)
         {
-            var visualDuration = Mathf.Max(0.18f, specialClearVisualDuration);
             foreach (var piece in matchedPieces)
             {
                 if (piece == null)
@@ -760,33 +696,53 @@ namespace Match3Foodie
 
                 if (!specialClearedPieces.Contains(piece))
                 {
-                    visualDuration = Mathf.Max(visualDuration, StartClearVisual(piece));
-                }
-            }
-
-            yield return new WaitForSeconds(visualDuration);
-
-            foreach (var piece in matchedPieces)
-            {
-                if (piece != null)
-                {
-                    Destroy(piece.gameObject);
+                    StartClearVisual(piece);
                 }
             }
 
             specialClearedPieces.Clear();
-            specialClearVisualDuration = 0f;
+            yield break;
         }
 
         private float StartClearVisual(Match3PieceView piece)
         {
+            if (piece == null)
+            {
+                return 0f;
+            }
+
+            float duration;
             if (TryStartCollectionFlyer(piece, out var collectDuration))
             {
+                ScheduleDestroyPiece(piece, collectDuration);
                 return collectDuration;
             }
 
             StartCoroutine(piece.PlayDestroyRoutine());
-            return 0.18f;
+            duration = 0.18f;
+            ScheduleDestroyPiece(piece, duration);
+            return duration;
+        }
+
+        private void ScheduleDestroyPiece(Match3PieceView piece, float delay)
+        {
+            if (piece != null)
+            {
+                StartCoroutine(DestroyPieceAfterDelayRoutine(piece, delay));
+            }
+        }
+
+        private IEnumerator DestroyPieceAfterDelayRoutine(Match3PieceView piece, float delay)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            if (piece != null)
+            {
+                Destroy(piece.gameObject);
+            }
         }
 
         private bool TryStartCollectionFlyer(Match3PieceView piece, out float duration)
@@ -937,8 +893,8 @@ namespace Match3Foodie
                         var distance = readY - writeY;
                         var duration = Mathf.Max(settings.FallDurationPerCell * distance, settings.FallDurationPerCell);
                         piece.SetGridPosition(target);
-                        piece.MoveTo(WorldPosition(target), duration);
-                        longestDuration = Mathf.Max(longestDuration, duration);
+                        piece.FallTo(WorldPosition(target), duration, settings.FallImpactBounceDistance, settings.FallImpactBounceDuration);
+                        longestDuration = Mathf.Max(longestDuration, duration + settings.FallImpactBounceDuration);
                     }
 
                     writeY++;
@@ -974,8 +930,15 @@ namespace Match3Foodie
                     var duration = Mathf.Max(settings.RefillFallDurationPerCell * distance, settings.RefillFallDurationPerCell);
                     var delayRange = settings.RefillRandomDelay;
                     var delay = Random.Range(Mathf.Min(delayRange.x, delayRange.y), Mathf.Max(delayRange.x, delayRange.y));
-                    piece.SpawnDropTo(WorldPosition(target), duration, delay, settings.RefillSpawnScale, settings.RefillPopScale);
-                    longestDuration = Mathf.Max(longestDuration, duration + delay);
+                    piece.SpawnDropTo(
+                        WorldPosition(target),
+                        duration,
+                        delay,
+                        settings.RefillSpawnScale,
+                        settings.RefillPopScale,
+                        settings.FallImpactBounceDistance,
+                        settings.FallImpactBounceDuration);
+                    longestDuration = Mathf.Max(longestDuration, duration + delay + settings.FallImpactBounceDuration);
                     missing++;
                 }
             }

@@ -19,13 +19,15 @@ MonoBehaviour:
   elementSize: 1.04
   swapDuration: 0.16
   shuffleDuration: 0.28
-  fallDurationPerCell: 0.085
+  fallDurationPerCell: 0.15
   refillFallDurationPerCell: 0.085
   clearDelay: 0.06
-  refillDelay: 0.04
-  refillRandomDelay: {x: 0, y: 0.12}
+  refillDelay: 0.1
+  refillRandomDelay: {x: 0, y: 0}
   refillSpawnScale: 0.72
   refillPopScale: 1.08
+  fallImpactBounceDistance: 0.045
+  fallImpactBounceDuration: 0.15
   collectFlightSpeed: 12
   collectExitDistance: 0.35
   collectExitDuration: 0.12

@@ -1,42 +1,66 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Match3Foodie
 {
     public sealed class Match3LevelController : MonoBehaviour
     {
         [Serializable] public sealed class FloatEvent : UnityEvent<float> { }
+        [Serializable] public sealed class IntPairEvent : UnityEvent<int, int> { }
         [Serializable] public sealed class GoalProgressEvent : UnityEvent<Match3GoalProgress> { }
         [Serializable] public sealed class GoalsProgressEvent : UnityEvent<List<Match3GoalProgress>> { }
 
         [Header("Config")]
         [SerializeField] private Match3LevelSettings levelSettings;
         [SerializeField] private Match3Board board;
+        [SerializeField] private Match3MathChallengePopup mathChallengePopup;
+        [SerializeField] private Match3BoosterController boosterController;
         [SerializeField] private bool startTimerOnEnable = true;
         [SerializeField] private bool disableBoardWhenLevelEnds = true;
+
+        [Header("Debug")]
+        [SerializeField] private bool enableDebugMathBonusKey = true;
+#if ENABLE_INPUT_SYSTEM
+        [SerializeField] private Key debugMathBonusKey = Key.M;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+        [SerializeField] private KeyCode debugMathBonusKey = KeyCode.M;
+#endif
 
         [Header("Events")]
         [SerializeField] private FloatEvent timerChanged = new();
         [SerializeField] private GoalProgressEvent goalChanged = new();
         [SerializeField] private GoalsProgressEvent goalsChanged = new();
+        [SerializeField] private IntPairEvent mathBonusCounterChanged = new();
         [SerializeField] private UnityEvent levelCompleted = new();
         [SerializeField] private UnityEvent levelFailed = new();
 
         private readonly List<Match3GoalProgress> goalProgress = new();
         private float remainingTime;
+        private int mathBonusCollectedAmount;
         private bool timerRunning;
         private bool levelEnded;
+        private bool mathChallengePending;
+        private bool mathChallengeRunning;
+        private Coroutine mathChallengeRoutine;
 
         public Match3LevelSettings LevelSettings => levelSettings;
         public float RemainingTime => remainingTime;
+        public int MathBonusCollectedAmount => mathBonusCollectedAmount;
+        public int MathBonusRequiredCollections => levelSettings != null ? levelSettings.MathBonusRequiredCollections : 0;
+        public Match3ElementDefinition MathBonusElement => ResolveMathBonusElement();
         public bool IsTimerRunning => timerRunning;
         public bool IsLevelEnded => levelEnded;
         public IReadOnlyList<Match3GoalProgress> Goals => goalProgress;
         public FloatEvent TimerChanged => timerChanged;
         public GoalProgressEvent GoalChanged => goalChanged;
         public GoalsProgressEvent GoalsChanged => goalsChanged;
+        public IntPairEvent MathBonusCounterChanged => mathBonusCounterChanged;
         public UnityEvent LevelCompleted => levelCompleted;
         public UnityEvent LevelFailed => levelFailed;
 
@@ -47,6 +71,16 @@ namespace Match3Foodie
                 board = FindAnyObjectByType<Match3Board>();
             }
 
+            if (mathChallengePopup == null)
+            {
+                mathChallengePopup = FindAnyObjectByType<Match3MathChallengePopup>();
+            }
+
+            if (boosterController == null)
+            {
+                boosterController = FindAnyObjectByType<Match3BoosterController>();
+            }
+
             ResetLevelState();
         }
 
@@ -55,6 +89,8 @@ namespace Match3Foodie
             if (board != null)
             {
                 board.PieceCollected.AddListener(HandlePieceCollected);
+                board.PiecesMatched.AddListener(HandlePiecesMatched);
+                board.BoardSettled.AddListener(HandleBoardSettled);
             }
 
             if (startTimerOnEnable)
@@ -68,11 +104,18 @@ namespace Match3Foodie
             if (board != null)
             {
                 board.PieceCollected.RemoveListener(HandlePieceCollected);
+                board.PiecesMatched.RemoveListener(HandlePiecesMatched);
+                board.BoardSettled.RemoveListener(HandleBoardSettled);
             }
         }
 
         private void Update()
         {
+            if (enableDebugMathBonusKey && TryGetDebugMathBonusInput())
+            {
+                DebugFillMathBonusCounter();
+            }
+
             if (!timerRunning || levelEnded)
             {
                 return;
@@ -92,8 +135,17 @@ namespace Match3Foodie
         {
             goalProgress.Clear();
             remainingTime = levelSettings != null ? levelSettings.TimeLimitSeconds : 0f;
+            mathBonusCollectedAmount = 0;
+            mathChallengePending = false;
+            mathChallengeRunning = false;
             timerRunning = false;
             levelEnded = false;
+
+            if (mathChallengeRoutine != null)
+            {
+                StopCoroutine(mathChallengeRoutine);
+                mathChallengeRoutine = null;
+            }
 
             if (board != null)
             {
@@ -113,6 +165,7 @@ namespace Match3Foodie
 
             timerChanged.Invoke(remainingTime);
             goalsChanged.Invoke(new List<Match3GoalProgress>(goalProgress));
+            mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, MathBonusRequiredCollections);
         }
 
         public void StartTimer()
@@ -159,6 +212,30 @@ namespace Match3Foodie
             return $"{seconds / 60:00}:{seconds % 60:00}";
         }
 
+        [ContextMenu("Debug Fill Math Bonus Counter")]
+        public void DebugFillMathBonusCounter()
+        {
+            if (levelEnded
+                || levelSettings == null
+                || MathBonusElement == null
+                || mathChallengePending
+                || mathChallengeRunning
+                || mathChallengeRoutine != null)
+            {
+                return;
+            }
+
+            var required = Mathf.Max(1, levelSettings.MathBonusRequiredCollections);
+            mathBonusCollectedAmount = required;
+            mathChallengePending = true;
+            mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, required);
+
+            if (board == null || !board.IsResolving)
+            {
+                HandleBoardSettled();
+            }
+        }
+
         private void HandlePieceCollected(Match3PieceView collectedPiece)
         {
             if (levelEnded || collectedPiece == null)
@@ -190,6 +267,150 @@ namespace Match3Foodie
             {
                 CompleteLevel();
             }
+        }
+
+        private void HandlePiecesMatched(List<Match3PieceView> matchedPieces)
+        {
+            if (levelSettings == null
+                || MathBonusElement == null
+                || matchedPieces == null
+                || mathChallengePending
+                || mathChallengeRunning)
+            {
+                return;
+            }
+
+            var required = Mathf.Max(1, levelSettings.MathBonusRequiredCollections);
+            var collectedThisMatch = 0;
+            foreach (var piece in matchedPieces)
+            {
+                if (piece != null && piece.Definition == MathBonusElement)
+                {
+                    collectedThisMatch++;
+                }
+            }
+
+            if (collectedThisMatch <= 0)
+            {
+                return;
+            }
+
+            mathBonusCollectedAmount = Mathf.Min(required, mathBonusCollectedAmount + collectedThisMatch);
+            mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, required);
+
+            if (mathBonusCollectedAmount >= required)
+            {
+                mathChallengePending = true;
+            }
+        }
+
+        private void HandleBoardSettled()
+        {
+            if (levelEnded || !mathChallengePending || mathChallengeRunning || mathChallengeRoutine != null)
+            {
+                return;
+            }
+
+            mathChallengeRoutine = StartCoroutine(StartPendingMathChallengeRoutine());
+        }
+
+        private IEnumerator StartPendingMathChallengeRoutine()
+        {
+            mathChallengeRunning = true;
+            var boardInputShouldResume = !levelEnded;
+            board?.SetInputEnabled(false);
+
+            var delay = levelSettings != null ? levelSettings.MathChallengeStartDelay : 0.5f;
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            if (mathChallengePopup == null)
+            {
+                mathChallengePopup = FindAnyObjectByType<Match3MathChallengePopup>();
+            }
+
+            if (boosterController == null)
+            {
+                boosterController = FindAnyObjectByType<Match3BoosterController>();
+            }
+
+            var mathBonusElement = MathBonusElement;
+            if (mathChallengePopup != null && levelSettings != null && mathBonusElement != null)
+            {
+                var timerWasRunning = timerRunning;
+                PauseTimer();
+                boosterController?.SetControlsLocked(true);
+
+                var answered = false;
+                var correctAnswers = 0;
+                mathChallengePopup.Show(mathBonusElement.MathBonusSeconds, count =>
+                {
+                    answered = true;
+                    correctAnswers = count;
+                });
+
+                yield return new WaitUntil(() => answered);
+
+                if (correctAnswers > 0)
+                {
+                    AddTime(mathBonusElement.MathBonusSeconds * correctAnswers);
+                }
+
+                if (timerWasRunning)
+                {
+                    ResumeTimer();
+                }
+
+            }
+
+            if (boardInputShouldResume && !levelEnded)
+            {
+                board?.SetInputEnabled(true);
+            }
+
+            boosterController?.SetControlsLocked(false);
+
+            mathBonusCollectedAmount = 0;
+            mathChallengePending = false;
+            mathChallengeRunning = false;
+            mathChallengeRoutine = null;
+            mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, MathBonusRequiredCollections);
+        }
+
+        private Match3ElementDefinition ResolveMathBonusElement()
+        {
+            if (levelSettings != null && levelSettings.MathBonusElement != null)
+            {
+                return levelSettings.MathBonusElement;
+            }
+
+            if (board == null || board.Settings == null)
+            {
+                return null;
+            }
+
+            foreach (var element in board.Settings.Elements)
+            {
+                if (element != null && element.SpecialEffectType == Match3SpecialEffectType.MathBonus)
+                {
+                    return element;
+                }
+            }
+
+            return null;
+        }
+
+        private bool TryGetDebugMathBonusInput()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current[debugMathBonusKey].wasPressedThisFrame;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKeyDown(debugMathBonusKey);
+#else
+            return false;
+#endif
         }
 
         private bool AreAllGoalsComplete()

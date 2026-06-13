@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -118,6 +119,10 @@ namespace Match3Foodie
         [SerializeField] private TMP_Text popColorUsesText;
         [SerializeField] private TMP_Text randomWalkUsesText;
 
+        [Header("Input Lock")]
+        [SerializeField] private CanvasGroup controlsCanvasGroup;
+        [SerializeField, Min(0f)] private float lockFadeDuration = 0.18f;
+
         [Header("Selection Shader")]
         [SerializeField] private BoosterButtonShaderVisual popAnyButtonVisual;
         [SerializeField] private BoosterButtonShaderVisual popColorButtonVisual;
@@ -138,6 +143,8 @@ namespace Match3Foodie
         [SerializeField] private IntEvent randomWalkUsesChanged = new();
 
         private Match3BoosterType activeBooster;
+        private bool controlsLocked;
+        private Coroutine controlsFadeRoutine;
 
         public Match3BoosterType ActiveBooster => activeBooster;
         public int PopAnyUses => popAnyUses;
@@ -160,6 +167,7 @@ namespace Match3Foodie
             RefreshUsesUI();
             InitializeButtonVisuals();
             RefreshButtonVisuals();
+            ApplyControlsLockVisual(false, true);
         }
 
         private void OnValidate()
@@ -231,6 +239,22 @@ namespace Match3Foodie
             boosterCanceled.Invoke(canceled);
         }
 
+        public void SetControlsLocked(bool locked)
+        {
+            if (controlsLocked == locked)
+            {
+                return;
+            }
+
+            controlsLocked = locked;
+            if (controlsLocked)
+            {
+                CancelActiveBooster();
+            }
+
+            ApplyControlsLockVisual(controlsLocked, false);
+        }
+
         public void SetUses(Match3BoosterType boosterType, int uses)
         {
             switch (boosterType)
@@ -254,7 +278,7 @@ namespace Match3Foodie
 
         private void ActivateBooster(Match3BoosterType boosterType)
         {
-            if (board == null || board.IsResolving || GetUses(boosterType) <= 0)
+            if (controlsLocked || board == null || board.IsResolving || GetUses(boosterType) <= 0)
             {
                 return;
             }
@@ -404,6 +428,54 @@ namespace Match3Foodie
             popAnyButtonVisual?.Restore();
             popColorButtonVisual?.Restore();
             randomWalkButtonVisual?.Restore();
+        }
+
+        private void ApplyControlsLockVisual(bool locked, bool instant)
+        {
+            if (controlsCanvasGroup == null)
+            {
+                controlsCanvasGroup = GetComponent<CanvasGroup>();
+            }
+
+            if (controlsCanvasGroup == null)
+            {
+                return;
+            }
+
+            controlsCanvasGroup.interactable = !locked;
+            controlsCanvasGroup.blocksRaycasts = !locked;
+
+            var targetAlpha = locked ? 0f : 1f;
+            if (controlsFadeRoutine != null)
+            {
+                StopCoroutine(controlsFadeRoutine);
+                controlsFadeRoutine = null;
+            }
+
+            if (instant || lockFadeDuration <= 0f)
+            {
+                controlsCanvasGroup.alpha = targetAlpha;
+                return;
+            }
+
+            controlsFadeRoutine = StartCoroutine(FadeControlsRoutine(targetAlpha));
+        }
+
+        private IEnumerator FadeControlsRoutine(float targetAlpha)
+        {
+            var startAlpha = controlsCanvasGroup.alpha;
+            var elapsed = 0f;
+
+            while (elapsed < lockFadeDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = Mathf.Clamp01(elapsed / lockFadeDuration);
+                controlsCanvasGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, t);
+                yield return null;
+            }
+
+            controlsCanvasGroup.alpha = targetAlpha;
+            controlsFadeRoutine = null;
         }
 
         private static bool TryGetPointerUp(out Vector2 screenPosition)

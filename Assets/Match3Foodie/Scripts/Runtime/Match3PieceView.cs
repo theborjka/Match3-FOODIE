@@ -10,6 +10,7 @@ namespace Match3Foodie
         [SerializeField] private SpriteRenderer spriteRenderer;
         [SerializeField, Min(0.01f)] private float destroyPopDuration = 0.16f;
         [SerializeField] private AnimationCurve moveCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [SerializeField] private AnimationCurve fallCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
         [SerializeField] private AnimationCurve destroyScaleCurve = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
 
         private Match3Board board;
@@ -91,6 +92,17 @@ namespace Match3Foodie
             return motionRoutine;
         }
 
+        public Coroutine FallTo(Vector3 worldPosition, float duration, float impactBounceDistance, float impactBounceDuration)
+        {
+            if (motionRoutine != null)
+            {
+                StopCoroutine(motionRoutine);
+            }
+
+            motionRoutine = StartCoroutine(FallRoutine(worldPosition, duration, impactBounceDistance, impactBounceDuration));
+            return motionRoutine;
+        }
+
         public Coroutine FlyFishTo(Vector3 worldPosition, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle, int sortingOrderBoost)
         {
             if (motionRoutine != null)
@@ -102,14 +114,14 @@ namespace Match3Foodie
             return motionRoutine;
         }
 
-        public Coroutine SpawnDropTo(Vector3 worldPosition, float duration, float delay, float spawnScale, float popScale)
+        public Coroutine SpawnDropTo(Vector3 worldPosition, float duration, float delay, float spawnScale, float popScale, float impactBounceDistance, float impactBounceDuration)
         {
             if (motionRoutine != null)
             {
                 StopCoroutine(motionRoutine);
             }
 
-            motionRoutine = StartCoroutine(SpawnDropRoutine(worldPosition, duration, delay, spawnScale, popScale));
+            motionRoutine = StartCoroutine(SpawnDropRoutine(worldPosition, duration, delay, spawnScale, popScale, impactBounceDistance, impactBounceDuration));
             return motionRoutine;
         }
 
@@ -156,6 +168,11 @@ namespace Match3Foodie
 
         private IEnumerator MoveRoutine(Vector3 target, float duration)
         {
+            yield return MoveRoutine(target, duration, moveCurve);
+        }
+
+        private IEnumerator MoveRoutine(Vector3 target, float duration, AnimationCurve curve)
+        {
             transform.rotation = baseRotation;
             ResetSpriteFacing();
             ResetSorting();
@@ -166,11 +183,36 @@ namespace Match3Foodie
             {
                 elapsed += Time.deltaTime;
                 var t = Mathf.Clamp01(elapsed / duration);
-                transform.position = Vector3.LerpUnclamped(start, target, moveCurve.Evaluate(t));
+                transform.position = Vector3.LerpUnclamped(start, target, curve.Evaluate(t));
                 yield return null;
             }
 
             transform.position = target;
+            motionRoutine = null;
+        }
+
+        private IEnumerator FallRoutine(Vector3 target, float duration, float impactBounceDistance, float impactBounceDuration)
+        {
+            transform.rotation = baseRotation;
+            ResetSpriteFacing();
+            ResetSorting();
+
+            var start = transform.position;
+            var safeDuration = Mathf.Max(0.01f, duration);
+            var elapsed = 0f;
+            var fallDirection = (target - start).normalized;
+
+            while (elapsed < safeDuration)
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / safeDuration);
+                transform.position = Vector3.LerpUnclamped(start, target, fallCurve.Evaluate(t));
+                yield return null;
+            }
+
+            transform.position = target;
+            transform.localScale = baseScale;
+            yield return ImpactBounceRoutine(target, fallDirection, impactBounceDistance, impactBounceDuration);
             motionRoutine = null;
         }
 
@@ -250,7 +292,7 @@ namespace Match3Foodie
             motionRoutine = null;
         }
 
-        private IEnumerator SpawnDropRoutine(Vector3 target, float duration, float delay, float spawnScale, float popScale)
+        private IEnumerator SpawnDropRoutine(Vector3 target, float duration, float delay, float spawnScale, float popScale, float impactBounceDistance, float impactBounceDuration)
         {
             transform.rotation = baseRotation;
             ResetSpriteFacing();
@@ -260,6 +302,7 @@ namespace Match3Foodie
             var safeDuration = Mathf.Max(0.01f, duration);
             var startScale = baseScale * spawnScale;
             var overshootScale = baseScale * popScale;
+            var fallDirection = (target - start).normalized;
             transform.localScale = startScale;
 
             if (delay > 0f)
@@ -271,17 +314,42 @@ namespace Match3Foodie
             {
                 elapsed += Time.deltaTime;
                 var t = Mathf.Clamp01(elapsed / safeDuration);
-                transform.position = Vector3.LerpUnclamped(start, target, moveCurve.Evaluate(t));
+                transform.position = Vector3.LerpUnclamped(start, target, fallCurve.Evaluate(t));
 
-                transform.localScale = t < 0.65f
+                var animatedScale = t < 0.65f
                     ? Vector3.LerpUnclamped(startScale, overshootScale, Mathf.InverseLerp(0f, 0.65f, t))
                     : Vector3.LerpUnclamped(overshootScale, baseScale, Mathf.InverseLerp(0.65f, 1f, t));
+                transform.localScale = animatedScale;
                 yield return null;
             }
 
             transform.position = target;
             transform.localScale = baseScale;
+            yield return ImpactBounceRoutine(target, fallDirection, impactBounceDistance, impactBounceDuration);
             motionRoutine = null;
+        }
+
+        private IEnumerator ImpactBounceRoutine(Vector3 target, Vector3 fallDirection, float distance, float duration)
+        {
+            if (distance <= 0f || duration <= 0f || fallDirection.sqrMagnitude <= 0.0001f)
+            {
+                transform.position = target;
+                yield break;
+            }
+
+            var offset = -fallDirection.normalized * distance;
+            var safeDuration = Mathf.Max(0.01f, duration);
+            var elapsed = 0f;
+
+            while (elapsed < safeDuration)
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / safeDuration);
+                transform.position = target + offset * Mathf.Sin(t * Mathf.PI);
+                yield return null;
+            }
+
+            transform.position = target;
         }
 
         private IEnumerator FishFlightRoutine(Vector3 target, float speed, float waveAmplitude, float waveFrequency, bool faceDirection, float spriteForwardAngle, float maxTiltAngle, int sortingOrderBoost)
