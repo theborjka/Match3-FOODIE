@@ -113,6 +113,9 @@ namespace Match3Foodie
         [Header("Random Walk")]
         [SerializeField, Min(1)] private int randomWalkPieceCount = 8;
         [SerializeField] private bool randomWalkAvoidRepeats = true;
+        [SerializeField] private GameObject randomWalkVisualPrefab;
+        [SerializeField, Min(0.01f)] private float randomWalkVisualSpeed = 8f;
+        [SerializeField, Min(0f)] private float randomWalkVisualLifetimeAfterUse = 0.35f;
 
         [Header("Optional UI")]
         [SerializeField] private TMP_Text popAnyUsesText;
@@ -144,6 +147,7 @@ namespace Match3Foodie
 
         private Match3BoosterType activeBooster;
         private bool controlsLocked;
+        private bool boosterUseInProgress;
         private Coroutine controlsFadeRoutine;
 
         public Match3BoosterType ActiveBooster => activeBooster;
@@ -186,7 +190,7 @@ namespace Match3Foodie
 
         private void Update()
         {
-            if (activeBooster == Match3BoosterType.None)
+            if (activeBooster == Match3BoosterType.None || boosterUseInProgress)
             {
                 return;
             }
@@ -234,6 +238,7 @@ namespace Match3Foodie
 
             var canceled = activeBooster;
             activeBooster = Match3BoosterType.None;
+            boosterUseInProgress = false;
             board?.SetInputEnabled(true);
             RefreshButtonVisuals();
             boosterCanceled.Invoke(canceled);
@@ -291,8 +296,14 @@ namespace Match3Foodie
 
         private void TryUseActiveBooster(Match3PieceView selectedPiece)
         {
-            if (selectedPiece == null || GetUses(activeBooster) <= 0)
+            if (selectedPiece == null || GetUses(activeBooster) <= 0 || boosterUseInProgress)
             {
+                return;
+            }
+
+            if (activeBooster == Match3BoosterType.RandomWalk)
+            {
+                StartCoroutine(UseRandomWalkBoosterRoutine(selectedPiece));
                 return;
             }
 
@@ -310,13 +321,41 @@ namespace Match3Foodie
             boosterUsed.Invoke(used);
         }
 
+        private IEnumerator UseRandomWalkBoosterRoutine(Match3PieceView selectedPiece)
+        {
+            boosterUseInProgress = true;
+
+            var path = BuildRandomWalk(selectedPiece);
+            if (path.Count == 0)
+            {
+                boosterUseInProgress = false;
+                yield break;
+            }
+
+            if (!board.TryClearPiecesByBoosterSequence(
+                    path,
+                    randomWalkVisualPrefab,
+                    randomWalkVisualSpeed,
+                    randomWalkVisualLifetimeAfterUse))
+            {
+                boosterUseInProgress = false;
+                yield break;
+            }
+
+            DecrementUses(Match3BoosterType.RandomWalk);
+            activeBooster = Match3BoosterType.None;
+            boosterUseInProgress = false;
+            board.SetInputEnabled(true);
+            RefreshButtonVisuals();
+            boosterUsed.Invoke(Match3BoosterType.RandomWalk);
+        }
+
         private List<Match3PieceView> GetPiecesForBooster(Match3BoosterType boosterType, Match3PieceView selectedPiece)
         {
             return boosterType switch
             {
                 Match3BoosterType.PopAnyPiece => new List<Match3PieceView> { selectedPiece },
                 Match3BoosterType.PopAllOfColor => board.GetPiecesWithDefinition(selectedPiece.Definition),
-                Match3BoosterType.RandomWalk => BuildRandomWalk(selectedPiece),
                 _ => new List<Match3PieceView>(),
             };
         }

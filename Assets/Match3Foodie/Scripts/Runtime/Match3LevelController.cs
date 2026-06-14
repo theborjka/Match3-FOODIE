@@ -28,8 +28,12 @@ namespace Match3Foodie
         [SerializeField] private bool enableDebugMathBonusKey = true;
 #if ENABLE_INPUT_SYSTEM
         [SerializeField] private Key debugMathBonusKey = Key.M;
+        [SerializeField] private bool enableDebugFailKey = true;
+        [SerializeField] private Key debugFailKey = Key.L;
 #elif ENABLE_LEGACY_INPUT_MANAGER
         [SerializeField] private KeyCode debugMathBonusKey = KeyCode.M;
+        [SerializeField] private bool enableDebugFailKey = true;
+        [SerializeField] private KeyCode debugFailKey = KeyCode.L;
 #endif
 
         [Header("Events")]
@@ -114,6 +118,11 @@ namespace Match3Foodie
             if (enableDebugMathBonusKey && TryGetDebugMathBonusInput())
             {
                 DebugFillMathBonusCounter();
+            }
+
+            if (enableDebugFailKey && TryGetDebugFailInput())
+            {
+                DebugFailLevel();
             }
 
             if (!timerRunning || levelEnded)
@@ -210,6 +219,33 @@ namespace Match3Foodie
         {
             var seconds = Mathf.CeilToInt(remainingTime);
             return $"{seconds / 60:00}:{seconds % 60:00}";
+        }
+
+        public void RestartLevel()
+        {
+            if (mathChallengeRoutine != null)
+            {
+                StopCoroutine(mathChallengeRoutine);
+                mathChallengeRoutine = null;
+            }
+
+            boosterController?.SetControlsLocked(false);
+            ResetLevelState();
+            board?.RebuildBoard(true);
+            StartTimer();
+        }
+
+        [ContextMenu("Debug Fail Level")]
+        public void DebugFailLevel()
+        {
+            if (levelEnded)
+            {
+                return;
+            }
+
+            remainingTime = 0f;
+            timerChanged.Invoke(remainingTime);
+            FailLevel();
         }
 
         [ContextMenu("Debug Fill Math Bonus Counter")]
@@ -408,6 +444,17 @@ namespace Match3Foodie
             return Keyboard.current != null && Keyboard.current[debugMathBonusKey].wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
             return Input.GetKeyDown(debugMathBonusKey);
+#else
+            return false;
+#endif
+        }
+
+        private bool TryGetDebugFailInput()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current[debugFailKey].wasPressedThisFrame;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKeyDown(debugFailKey);
 #else
             return false;
 #endif

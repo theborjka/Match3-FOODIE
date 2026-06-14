@@ -46,6 +46,10 @@ namespace Match3Foodie
         [SerializeField, Min(0f)] private float rewardHoldDuration = 0.45f;
         [SerializeField, Min(0f)] private float rewardHideDuration = 0.16f;
         [SerializeField, Min(1f)] private float rewardPopScale = 1.14f;
+        [SerializeField] private RectTransform rewardFlyTarget;
+        [SerializeField, Min(0f)] private float rewardFlyDuration = 0.45f;
+        [SerializeField, Min(1f)] private float rewardArrivePopScale = 1.2f;
+        [SerializeField, Min(0f)] private float rewardArrivePopDuration = 0.16f;
         [SerializeField] private GameObject rewardVfxPrefab;
         [SerializeField] private RewardVfxSpace rewardVfxSpace = RewardVfxSpace.World;
         [SerializeField] private RectTransform rewardVfxParent;
@@ -65,7 +69,6 @@ namespace Match3Foodie
         private bool isOpen;
         private bool isWaitingForFeedback;
         private Coroutine motionRoutine;
-        private Coroutine rewardRoutine;
 
         public bool IsOpen => isOpen;
         public int QuestionsPerGame => questionsPerGame;
@@ -185,7 +188,6 @@ namespace Match3Foodie
             if (wasCorrect)
             {
                 correctAnswers++;
-                PlayRewardAnnouncer();
             }
             remainingQuestions--;
 
@@ -229,6 +231,11 @@ namespace Match3Foodie
             var callback = completed;
             completed = null;
             yield return HideWithMotionRoutine();
+
+            if (correctAnswers > 0)
+            {
+                yield return PlayRewardAnnouncerRoutine(correctAnswers * rewardSecondsPerCorrectAnswer);
+            }
             callback?.Invoke(correctAnswers);
         }
 
@@ -255,6 +262,9 @@ namespace Match3Foodie
             rewardHoldDuration = Mathf.Max(0f, rewardHoldDuration);
             rewardHideDuration = Mathf.Max(0f, rewardHideDuration);
             rewardPopScale = Mathf.Max(1f, rewardPopScale);
+            rewardFlyDuration = Mathf.Max(0f, rewardFlyDuration);
+            rewardArrivePopScale = Mathf.Max(1f, rewardArrivePopScale);
+            rewardArrivePopDuration = Mathf.Max(0f, rewardArrivePopDuration);
             rewardWorldVfxCameraDistance = Mathf.Max(0.01f, rewardWorldVfxCameraDistance);
             rewardVfxLifetime = Mathf.Max(0f, rewardVfxLifetime);
         }
@@ -319,25 +329,26 @@ namespace Match3Foodie
             }
         }
 
-        private void PlayRewardAnnouncer()
+        private IEnumerator PlayRewardAnnouncerRoutine(float rewardSeconds)
         {
             if (rewardAnnouncerText == null)
             {
-                return;
+                yield break;
             }
 
             HideRewardAnnouncer(true);
-            rewardAnnouncerText.text = rewardSecondsPerCorrectAnswer > 0f
-                ? string.Format(rewardTextFormat, rewardSecondsPerCorrectAnswer)
+            rewardAnnouncerText.text = rewardSeconds > 0f
+                ? string.Format(rewardTextFormat, rewardSeconds)
                 : "Correct!";
             rewardAnnouncerText.gameObject.SetActive(true);
             SpawnRewardVfx();
-            rewardRoutine = StartCoroutine(RewardAnnouncerRoutine());
+            yield return RewardAnnouncerRoutine();
         }
 
         private IEnumerator RewardAnnouncerRoutine()
         {
             var transformToAnimate = rewardAnnouncerText.transform;
+            var startPosition = transformToAnimate.position;
             var elapsed = 0f;
 
             while (elapsed < rewardShowDuration)
@@ -356,27 +367,53 @@ namespace Match3Foodie
                 yield return new WaitForSecondsRealtime(rewardHoldDuration);
             }
 
-            elapsed = 0f;
-            while (elapsed < rewardHideDuration)
+            if (rewardFlyTarget != null)
             {
-                elapsed += Time.unscaledDeltaTime;
-                var t = rewardHideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / rewardHideDuration);
-                transformToAnimate.localScale = Vector3.one * Mathf.Lerp(1f, 0f, t);
-                yield return null;
+                elapsed = 0f;
+                var flyDuration = Mathf.Max(0.01f, rewardFlyDuration);
+                while (elapsed < flyDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    var t = Mathf.Clamp01(elapsed / flyDuration);
+                    var eased = EaseInOut(t);
+                    transformToAnimate.position = Vector3.LerpUnclamped(startPosition, rewardFlyTarget.position, eased);
+                    transformToAnimate.localScale = Vector3.one * Mathf.Lerp(1f, 0.72f, t);
+                    yield return null;
+                }
+
+                transformToAnimate.position = rewardFlyTarget.position;
+
+                elapsed = 0f;
+                var popDuration = Mathf.Max(0.01f, rewardArrivePopDuration);
+                while (elapsed < popDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    var t = Mathf.Clamp01(elapsed / popDuration);
+                    var scale = t < 0.5f
+                        ? Mathf.LerpUnclamped(0.72f, rewardArrivePopScale, t * 2f)
+                        : Mathf.LerpUnclamped(rewardArrivePopScale, 0f, (t - 0.5f) * 2f);
+                    transformToAnimate.localScale = Vector3.one * scale;
+                    yield return null;
+                }
+            }
+            else
+            {
+                elapsed = 0f;
+                while (elapsed < rewardHideDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    var t = rewardHideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / rewardHideDuration);
+                    transformToAnimate.localScale = Vector3.one * Mathf.Lerp(1f, 0f, t);
+                    yield return null;
+                }
             }
 
+            transformToAnimate.position = startPosition;
             HideRewardAnnouncer(false);
-            rewardRoutine = null;
         }
 
         private void HideRewardAnnouncer(bool stopRoutines)
         {
-            if (stopRoutines && rewardRoutine != null)
-            {
-                StopCoroutine(rewardRoutine);
-                rewardRoutine = null;
-            }
-
             if (rewardAnnouncerText == null)
             {
                 return;
@@ -596,6 +633,11 @@ namespace Match3Foodie
             const float c1 = 1.70158f;
             const float c3 = c1 + 1f;
             return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+        }
+
+        private static float EaseInOut(float t)
+        {
+            return t < 0.5f ? 2f * t * t : 1f - Mathf.Pow(-2f * t + 2f, 2f) * 0.5f;
         }
     }
 }

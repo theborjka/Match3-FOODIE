@@ -18,10 +18,26 @@ namespace Match3Foodie
         [Serializable] public sealed class PieceEvent : UnityEvent<Match3PieceView> { }
         [Serializable] public sealed class PiecesEvent : UnityEvent<List<Match3PieceView>> { }
 
+        private enum StartMotionDirection
+        {
+            Left,
+            Right,
+            Custom,
+        }
+
         [Header("Config")]
         [SerializeField] private Match3BoardSettings settings;
         [SerializeField] private Transform piecesRoot;
         [SerializeField] private Match3CollectionTargetProvider collectionTargetProvider;
+
+        [Header("Start Motion")]
+        [SerializeField] private bool playStartMotion = true;
+        [SerializeField] private StartMotionDirection startMotionDirection = StartMotionDirection.Left;
+        [SerializeField, Min(0f)] private float startMotionDistance = 8f;
+        [SerializeField] private Vector3 customStartMotionOffset;
+        [SerializeField, Min(0f)] private float startMotionDuration = 0.65f;
+        [SerializeField, Min(0f)] private float startMotionElasticDistance = 0.22f;
+        [SerializeField, Range(0.05f, 0.95f)] private float startMotionSlidePortion = 0.82f;
 
         [Header("Input")]
         [SerializeField] private bool inputEnabled = true;
@@ -41,7 +57,10 @@ namespace Match3Foodie
         private Match3PieceView pointerDownPiece;
         private Vector3 pointerDownWorld;
         private readonly HashSet<Match3PieceView> specialClearedPieces = new();
+        private Vector3 boardBaseLocalPosition;
+        private Coroutine startMotionRoutine;
         private bool isResolving;
+        private bool hasPlayedStartMotion;
         private int totalSpawnWeight;
 
         public Match3BoardSettings Settings => settings;
@@ -105,6 +124,36 @@ namespace Match3Foodie
             return true;
         }
 
+        public bool TryClearPiecesByBoosterSequence(
+            IEnumerable<Match3PieceView> piecesToClear,
+            GameObject visualPrefab,
+            float visualSpeed,
+            float visualLifetimeAfterUse)
+        {
+            if (isResolving || piecesToClear == null)
+            {
+                return false;
+            }
+
+            var path = new List<Match3PieceView>();
+            var seen = new HashSet<Match3PieceView>();
+            foreach (var piece in piecesToClear)
+            {
+                if (piece != null && seen.Add(piece))
+                {
+                    path.Add(piece);
+                }
+            }
+
+            if (path.Count == 0)
+            {
+                return false;
+            }
+
+            StartCoroutine(ClearBoosterPiecesSequenceRoutine(path, visualPrefab, visualSpeed, visualLifetimeAfterUse));
+            return true;
+        }
+
         public List<Match3PieceView> GetPiecesWithDefinition(Match3ElementDefinition definition)
         {
             var result = new List<Match3PieceView>();
@@ -135,6 +184,8 @@ namespace Match3Foodie
                 piecesRoot = transform;
             }
 
+            boardBaseLocalPosition = transform.localPosition;
+
             if (collectionTargetProvider == null)
             {
                 collectionTargetProvider = FindAnyObjectByType<Match3CollectionTargetProvider>();
@@ -155,6 +206,14 @@ namespace Match3Foodie
         public void BuildBoard()
         {
             ValidateSettings();
+
+            if (startMotionRoutine != null)
+            {
+                StopCoroutine(startMotionRoutine);
+                startMotionRoutine = null;
+            }
+
+            transform.localPosition = boardBaseLocalPosition;
             ClearExistingPieces();
             CacheSpawnWeights();
 
@@ -171,6 +230,82 @@ namespace Match3Foodie
                 }
             }
 
+            if (Application.isPlaying && playStartMotion && !hasPlayedStartMotion)
+            {
+                hasPlayedStartMotion = true;
+                startMotionRoutine = StartCoroutine(PlayStartMotionRoutine());
+                return;
+            }
+
+            boardSettled.Invoke();
+        }
+
+        public void RebuildBoard(bool replayStartMotion)
+        {
+            if (replayStartMotion)
+            {
+                hasPlayedStartMotion = false;
+            }
+
+            BuildBoard();
+        }
+
+        private IEnumerator PlayStartMotionRoutine()
+        {
+            var previousInputEnabled = inputEnabled;
+            inputEnabled = false;
+            isResolving = true;
+            pointerDownPiece = null;
+            SetSelectedPiece(null);
+
+            var target = boardBaseLocalPosition;
+            var offset = GetStartMotionOffset();
+            var start = target + offset;
+            var slideDirection = offset.sqrMagnitude > 0.0001f
+                ? -offset.normalized
+                : Vector3.up;
+            var overshoot = target + slideDirection * startMotionElasticDistance;
+
+            transform.localPosition = start;
+
+            if (startMotionDuration <= 0f)
+            {
+                transform.localPosition = target;
+                inputEnabled = previousInputEnabled;
+                isResolving = false;
+                startMotionRoutine = null;
+                boardSettled.Invoke();
+                yield break;
+            }
+
+            var slideDuration = startMotionDuration * startMotionSlidePortion;
+            var settleDuration = Mathf.Max(0f, startMotionDuration - slideDuration);
+            var elapsed = 0f;
+
+            while (elapsed < slideDuration)
+            {
+                elapsed += Time.deltaTime;
+                var t = slideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / slideDuration);
+                transform.localPosition = Vector3.LerpUnclamped(start, overshoot, EaseOutCubic(t));
+                yield return null;
+            }
+
+            if (settleDuration > 0f && startMotionElasticDistance > 0f)
+            {
+                elapsed = 0f;
+                while (elapsed < settleDuration)
+                {
+                    elapsed += Time.deltaTime;
+                    var t = Mathf.Clamp01(elapsed / settleDuration);
+                    transform.localPosition = Vector3.LerpUnclamped(overshoot, target, EaseOutCubic(t));
+                    yield return null;
+                }
+            }
+
+            transform.localPosition = target;
+            inputEnabled = previousInputEnabled;
+            isResolving = false;
+            startMotionRoutine = null;
             boardSettled.Invoke();
         }
 
@@ -472,11 +607,19 @@ namespace Match3Foodie
 
             yield return ResolveSpecialEffectsRoutine(clearSet);
 
-            var clearedPieces = new List<Match3PieceView>(clearSet);
+            var clearedPieces = new List<Match3PieceView>();
+            foreach (var piece in clearSet)
+            {
+                if (piece != null)
+                {
+                    clearedPieces.Add(piece);
+                }
+            }
             piecesMatched.Invoke(clearedPieces);
 
             yield return ClearPiecesRoutine(clearedPieces);
             yield return new WaitForSeconds(settings.ClearDelay);
+
             yield return CollapseColumnsRoutine();
             yield return new WaitForSeconds(settings.RefillDelay);
             yield return RefillColumnsRoutine();
@@ -494,6 +637,140 @@ namespace Match3Foodie
 
             isResolving = false;
             boardSettled.Invoke();
+        }
+
+        private IEnumerator ClearBoosterPiecesSequenceRoutine(
+            List<Match3PieceView> path,
+            GameObject visualPrefab,
+            float visualSpeed,
+            float visualLifetimeAfterUse)
+        {
+            isResolving = true;
+            SetSelectedPiece(null);
+            pointerDownPiece = null;
+
+            var clearSet = new HashSet<Match3PieceView>(path);
+            var specialRoutines = new List<Coroutine>();
+            var visual = CreateSequenceVisual(visualPrefab, path[0]);
+
+            for (var i = 0; i < path.Count; i++)
+            {
+                var piece = path[i];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                var targetPosition = WorldPosition(piece.GridPosition);
+                if (visual != null)
+                {
+                    yield return MoveSequenceVisualRoutine(visual.transform, targetPosition, visualSpeed);
+                }
+
+                ClearSequencePiece(piece, clearSet, specialRoutines);
+            }
+
+            DestroySequenceVisual(visual, visualLifetimeAfterUse);
+
+            yield return new WaitForSeconds(settings.ClearDelay);
+
+            foreach (var routine in specialRoutines)
+            {
+                yield return routine;
+            }
+
+            yield return CollapseColumnsRoutine();
+            yield return new WaitForSeconds(settings.RefillDelay);
+            yield return RefillColumnsRoutine();
+
+            var matches = FindMatches();
+            if (matches.Count > 0)
+            {
+                yield return ResolveMatchesRoutine(matches);
+            }
+
+            if (!HasAnyValidMove())
+            {
+                yield return ShuffleBoardRoutine();
+            }
+
+            isResolving = false;
+            boardSettled.Invoke();
+        }
+
+        private GameObject CreateSequenceVisual(GameObject visualPrefab, Match3PieceView startPiece)
+        {
+            if (visualPrefab == null || startPiece == null)
+            {
+                return null;
+            }
+
+            var visual = Instantiate(visualPrefab);
+            visual.SetActive(true);
+            visual.transform.position = WorldPosition(startPiece.GridPosition);
+
+            var trailRenderers = visual.GetComponentsInChildren<TrailRenderer>(true);
+            foreach (var trailRenderer in trailRenderers)
+            {
+                trailRenderer.Clear();
+            }
+
+            return visual;
+        }
+
+        private IEnumerator MoveSequenceVisualRoutine(Transform visual, Vector3 target, float speed)
+        {
+            if (visual == null)
+            {
+                yield break;
+            }
+
+            while (visual != null && Vector3.Distance(visual.position, target) > 0.001f)
+            {
+                visual.position = Vector3.MoveTowards(visual.position, target, Mathf.Max(0.01f, speed) * Time.deltaTime);
+                yield return null;
+            }
+
+            if (visual != null)
+            {
+                visual.position = target;
+            }
+        }
+
+        private void ClearSequencePiece(Match3PieceView piece, HashSet<Match3PieceView> clearSet, List<Coroutine> specialRoutines)
+        {
+            if (piece == null)
+            {
+                return;
+            }
+
+            piecesMatched.Invoke(new List<Match3PieceView> { piece });
+
+            if (piece.Definition != null && piece.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+            {
+                ClearPieceFromGrid(piece);
+                specialRoutines.Add(StartCoroutine(ResolveFishEffectNonBlockingRoutine(piece, clearSet)));
+                return;
+            }
+
+            StartCoroutine(ClearPiecesRoutine(new List<Match3PieceView> { piece }));
+        }
+
+        private void DestroySequenceVisual(GameObject visual, float lifetime)
+        {
+            if (visual == null)
+            {
+                return;
+            }
+
+            if (lifetime > 0f)
+            {
+                Destroy(visual, lifetime);
+            }
+            else
+            {
+                Destroy(visual);
+            }
         }
 
         private IEnumerator ResolveSpecialEffectsRoutine(HashSet<Match3PieceView> matches)
@@ -564,6 +841,73 @@ namespace Match3Foodie
             }
 
             specialClearedPieces.Add(target);
+            StartClearVisual(target);
+        }
+
+        private IEnumerator ResolveFishEffectNonBlockingRoutine(Match3PieceView fishPiece, HashSet<Match3PieceView> matches)
+        {
+            if (fishPiece == null)
+            {
+                yield break;
+            }
+
+            var target = PickRandomNonMatchedPiece(matches);
+            if (target == null)
+            {
+                StartClearVisual(fishPiece);
+                yield break;
+            }
+
+            matches.Add(target);
+
+            var delayRange = settings.FishRandomDelay;
+            var delay = Random.Range(Mathf.Min(delayRange.x, delayRange.y), Mathf.Max(delayRange.x, delayRange.y));
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            if (fishPiece == null || target == null)
+            {
+                if (fishPiece != null)
+                {
+                    StartClearVisual(fishPiece);
+                }
+
+                yield break;
+            }
+
+            var targetPosition = target.transform.position;
+            var distance = Vector3.Distance(fishPiece.transform.position, targetPosition);
+            var duration = distance / Mathf.Max(0.01f, settings.FishFlightSpeed);
+            fishPiece.FlyFishTo(
+                targetPosition,
+                settings.FishFlightSpeed,
+                settings.FishWaveAmplitude,
+                settings.FishWaveFrequency,
+                settings.FishFaceFlightDirection,
+                settings.FishSpriteForwardAngle,
+                settings.FishMaxTiltAngle,
+                settings.FishFlightSortingOrderBoost);
+
+            yield return new WaitForSeconds(duration);
+
+            ClearPieceFromGrid(fishPiece);
+            StartClearVisual(fishPiece);
+
+            if (target == null)
+            {
+                yield break;
+            }
+
+            ClearPieceFromGrid(target);
+
+            if (target.Definition != null && target.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+            {
+                yield return ResolveFishEffectNonBlockingRoutine(target, matches);
+                yield break;
+            }
+
             StartClearVisual(target);
         }
 
@@ -1660,6 +2004,22 @@ namespace Match3Foodie
             {
                 throw new InvalidOperationException("Match3 board needs at least three elements with spawn weight greater than zero.");
             }
+        }
+
+        private static float EaseOutCubic(float t)
+        {
+            return 1f - Mathf.Pow(1f - Mathf.Clamp01(t), 3f);
+        }
+
+        private Vector3 GetStartMotionOffset()
+        {
+            return startMotionDirection switch
+            {
+                StartMotionDirection.Left => Vector3.left * startMotionDistance,
+                StartMotionDirection.Right => Vector3.right * startMotionDistance,
+                StartMotionDirection.Custom => customStartMotionOffset,
+                _ => Vector3.left * startMotionDistance,
+            };
         }
 
         private void OnDrawGizmosSelected()
