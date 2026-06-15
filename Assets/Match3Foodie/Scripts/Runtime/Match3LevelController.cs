@@ -230,6 +230,7 @@ namespace Match3Foodie
             }
 
             boosterController?.SetControlsLocked(false);
+            boosterController?.ResetUsesToInitial();
             ResetLevelState();
             board?.RebuildBoard(true);
             StartTimer();
@@ -506,10 +507,8 @@ namespace Match3Foodie
             levelEnded = true;
             timerRunning = false;
 
-            if (disableBoardWhenLevelEnds && board != null)
-            {
-                board.SetInputEnabled(false);
-            }
+            board?.SetInputEnabled(false);
+            boosterController?.SetControlsLocked(true);
 
             levelFailed.Invoke();
         }

@@ -1459,7 +1459,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MOVES!
+  m_text: TIME!
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 75d71d573b2db47b196739d6a0ca9fe2, type: 2}
   m_sharedMaterial: {fileID: 2570795386128359188, guid: 75d71d573b2db47b196739d6a0ca9fe2, type: 2}
@@ -2555,7 +2555,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Oh no! you ran out of timeer. Restart and try again!
+  m_text: Oh no! you ran out of time. Restart and try again!
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 59658005a43804e928bad476744fa061, type: 2}
   m_sharedMaterial: {fileID: 612851019934020410, guid: 59658005a43804e928bad476744fa061, type: 2}
@@ -4654,7 +4654,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0, g: 0, b: 0, a: 0.9647059}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:

@@ -86,6 +86,8 @@ namespace Match3Foodie
             if (fadeGroup != null)
             {
                 fadeGroup.alpha = 0f;
+                fadeGroup.interactable = false;
+                fadeGroup.blocksRaycasts = false;
             }
 
             if (panel != null)
@@ -110,6 +112,8 @@ namespace Match3Foodie
             if (fadeGroup != null)
             {
                 fadeGroup.alpha = 0f;
+                fadeGroup.interactable = true;
+                fadeGroup.blocksRaycasts = true;
             }
 
             if (panel != null)

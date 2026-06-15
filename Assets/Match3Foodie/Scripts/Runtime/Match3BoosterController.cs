@@ -146,6 +146,9 @@ namespace Match3Foodie
         [SerializeField] private IntEvent randomWalkUsesChanged = new();
 
         private Match3BoosterType activeBooster;
+        private int initialPopAnyUses;
+        private int initialPopColorUses;
+        private int initialRandomWalkUses;
         private bool controlsLocked;
         private bool boosterUseInProgress;
         private Coroutine controlsFadeRoutine;
@@ -168,6 +171,9 @@ namespace Match3Foodie
                 board = FindAnyObjectByType<Match3Board>();
             }
 
+            initialPopAnyUses = popAnyUses;
+            initialPopColorUses = popColorUses;
+            initialRandomWalkUses = randomWalkUses;
             RefreshUsesUI();
             InitializeButtonVisuals();
             RefreshButtonVisuals();
@@ -258,6 +264,20 @@ namespace Match3Foodie
             }
 
             ApplyControlsLockVisual(controlsLocked, false);
+        }
+
+        public void ResetUsesToInitial()
+        {
+            activeBooster = Match3BoosterType.None;
+            boosterUseInProgress = false;
+            popAnyUses = Mathf.Max(0, initialPopAnyUses);
+            popColorUses = Mathf.Max(0, initialPopColorUses);
+            randomWalkUses = Mathf.Max(0, initialRandomWalkUses);
+            popAnyUsesChanged.Invoke(popAnyUses);
+            popColorUsesChanged.Invoke(popColorUses);
+            randomWalkUsesChanged.Invoke(randomWalkUses);
+            RefreshUsesUI();
+            RefreshButtonVisuals();
         }
 
         public void SetUses(Match3BoosterType boosterType, int uses)
