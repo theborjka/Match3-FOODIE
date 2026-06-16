@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <title>Match3 FOODIE</title>
+    <style>
+      /* Fill the browser window, remove scrollbars, and use black as natural letterbox/pillarbox color. */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: black;
+      }
+
+      /* Center the fixed portrait play area. Wider screens naturally show black bars on the sides. */
+      #unity-container {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: black;
+      }
+
+      /* Keep the Unity WebGL canvas locked to 9:16 without stretching or cropping. */
+      #unity-canvas {
+        width: min(100vw, calc(100vh * 9 / 16));
+        height: min(100vh, calc(100vw * 16 / 9));
+        aspect-ratio: 9 / 16;
+        background: black;
+        display: block;
+      }
+
+      #unity-loading-bar {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(70vw, 360px);
+        transform: translate(-50%, -50%);
+        display: none;
+      }
+
+      #unity-progress-bar-empty {
+        width: 100%;
+        height: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.16);
+      }
+
+      #unity-progress-bar-full {
+        width: 0%;
+        height: 100%;
+        background: white;
+      }
+
+      #unity-warning {
+        position: absolute;
+        left: 50%;
+        top: 5%;
+        transform: translateX(-50%);
+        max-width: min(90vw, 720px);
+        font-family: sans-serif;
+        font-size: 14px;
+        text-align: center;
+        color: white;
+        pointer-events: none;
+      }
+
+      #unity-warning div {
+        margin: 6px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.86);
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"></div>
+    </div>
+
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var warningBanner = document.querySelector("#unity-warning");
+
+      function unityShowBanner(msg, type) {
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? "block" : "none";
+        }
+
+        var div = document.createElement("div");
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+
+        if (type == "error") {
+          div.style.background = "rgba(200, 0, 0, 0.9)";
+        } else {
+          if (type == "warning") {
+            div.style.background = "rgba(255, 200, 0, 0.9)";
+            div.style.color = "black";
+          }
+
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/Build.loader.js";
+      var config = {
+        dataUrl: buildUrl + "/Build.data",
+        frameworkUrl: buildUrl + "/Build.framework.js",
+        codeUrl: buildUrl + "/Build.wasm",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "Match3 FOODIE",
+        productVersion: "1.0",
+        showBanner: unityShowBanner
+      };
+
+      loadingBar.style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = function() {
+        createUnityInstance(canvas, config, function(progress) {
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then(function(unityInstance) {
+          loadingBar.style.display = "none";
+        }).catch(function(message) {
+          alert(message);
+        });
+      };
+
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
