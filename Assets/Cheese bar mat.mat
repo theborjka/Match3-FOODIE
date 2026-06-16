@@ -7,13 +7,12 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Board Mat
+  m_Name: Cheese bar mat
   m_Shader: {fileID: 4800000, guid: bb134d7d4389e3a45a6c49e898a344a4, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _ENABLECONTRAST_ON
-  - _ENABLESATURATION_ON
+  - _ENABLERAINBOW_ON
   - _SHADERFADING_NONE
   - _SHADERSPACE_UV
   - _TEXTURELAYER1SHEETTOGGLE_ON
@@ -172,7 +171,7 @@ Material:
     - _ColorReplaceFade: 1
     - _ColorReplaceRange: 0.05
     - _ColorReplaceSmoothness: 0.1
-    - _Contrast: 1
+    - _Contrast: 5.99
     - _CustomFadeAlpha: 1
     - _CustomFadeNoiseFactor: 0
     - _CustomFadeSmoothness: 2
@@ -201,7 +200,7 @@ Material:
     - _EnableCamouflage: 0
     - _EnableCheckerboard: 0
     - _EnableColorReplace: 0
-    - _EnableContrast: 1
+    - _EnableContrast: 0
     - _EnableCustomFade: 0
     - _EnableDirectionalAlphaFade: 0
     - _EnableDirectionalDistortion: 0
@@ -227,10 +226,10 @@ Material:
     - _EnablePixelOutline: 0
     - _EnablePixelate: 0
     - _EnablePoison: 0
-    - _EnableRainbow: 0
+    - _EnableRainbow: 1
     - _EnableRecolorRGB: 0
     - _EnableRecolorRGBYCP: 0
-    - _EnableSaturation: 1
+    - _EnableSaturation: 0
     - _EnableScreenTiling: 0
     - _EnableShadow: 0
     - _EnableSharpen: 0
@@ -307,7 +306,7 @@ Material:
     - _HologramLineGap: 3
     - _HologramLineSpeed: 0.01
     - _HologramMinAlpha: 0.2
-    - _Hue: -1
+    - _Hue: -0.94
     - _InkSpreadContrast: 2
     - _InkSpreadDistance: 3
     - _InkSpreadFade: 1
@@ -317,7 +316,7 @@ Material:
     - _InnerOutlineFade: 1
     - _InnerOutlineOutlineOnlyToggle: 0
     - _InnerOutlineTextureToggle: 0
-    - _InnerOutlineWidth: 0.88
+    - _InnerOutlineWidth: -0.17
     - _IsText: 0
     - _IsTextMeshPro: 0
     - _MaskBrightness: 1
@@ -326,7 +325,7 @@ Material:
     - _MetalHighlightContrast: 2
     - _MetalHighlightDensity: 1
     - _MetalMaskToggle: 0
-    - _NegativeFade: 1
+    - _NegativeFade: 0.1
     - _NormalIntensity: 1
     - _OuterOutlineDistortionToggle: 0
     - _OuterOutlineFade: 1

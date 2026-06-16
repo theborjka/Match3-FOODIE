@@ -20,5 +20,6 @@ MonoBehaviour:
   - element: {fileID: 11400000, guid: 428f34a50a21049e0b419e90da6471a6, type: 2}
     requiredAmount: 25
   mathBonusElement: {fileID: 11400000, guid: 22e8fc2b9bbd847949fa5241a0e5b57b, type: 2}
-  mathBonusRequiredCollections: 10
+  mathBonusRequiredCollections: 5
+  mathBonusRequiredIncreasePerChallenge: 5
   mathChallengeStartDelay: 0.5

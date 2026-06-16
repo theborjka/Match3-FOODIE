@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,6 +23,29 @@ namespace Match3Foodie
 
         [Header("Math Bonus")]
         [SerializeField] private TMP_Text mathBonusCounterText;
+        [SerializeField] private RectTransform mathBonusProgressFillRect;
+        [SerializeField] private RectTransform mathBonusProgressBoundsRect;
+        [SerializeField, Min(0f)] private float mathBonusProgressFullWidth;
+        [SerializeField, Min(0f)] private float mathBonusProgressMotionDuration = 0.22f;
+        [SerializeField, Min(1f)] private float mathBonusProgressBumpScale = 1.06f;
+
+        [Header("Math Bonus Progress Shader")]
+        [SerializeField] private Image mathBonusProgressEffectImage;
+        [SerializeField] private string mathBonusProgressRainbowFadeProperty = "_RainbowFade";
+        [SerializeField] private bool enableMathBonusProgressRainbow = true;
+        [SerializeField, Range(0f, 1f)] private float mathBonusProgressRainbowActiveFade = 1f;
+        [SerializeField, Range(0f, 1f)] private float mathBonusProgressRainbowInactiveFade;
+
+        private float cachedMathBonusProgressFullWidth;
+        private bool hasCachedMathBonusProgressLayout;
+        private bool mathBonusProgressUsesStretchAnchors;
+        private Vector2 mathBonusProgressAnchorMin;
+        private Vector2 mathBonusProgressAnchorMax;
+        private Vector2 mathBonusProgressOffsetMin;
+        private Vector2 mathBonusProgressOffsetMax;
+        private Coroutine mathBonusProgressRoutine;
+        private Material mathBonusProgressOriginalMaterial;
+        private Material mathBonusProgressMaterialInstance;
 
         private void Awake()
         {
@@ -39,6 +63,8 @@ namespace Match3Foodie
             {
                 collectionTargetProvider = gameObject.AddComponent<Match3CollectionTargetProvider>();
             }
+
+            InitializeMathBonusProgressEffectMaterial();
         }
 
         private void OnEnable()
@@ -69,6 +95,11 @@ namespace Match3Foodie
             levelController.TimerChanged.RemoveListener(RefreshTimer);
             levelController.GoalsChanged.RemoveListener(RefreshGoals);
             levelController.MathBonusCounterChanged.RemoveListener(RefreshMathBonusCounter);
+        }
+
+        private void OnDestroy()
+        {
+            RestoreMathBonusProgressEffectMaterial();
         }
 
         public void RefreshAll()
@@ -131,19 +162,32 @@ namespace Match3Foodie
 
         private void RefreshMathBonusCounter(int collectedAmount, int requiredAmount)
         {
-            if (mathBonusCounterText == null)
+            var active = levelController != null && levelController.MathBonusElement != null && requiredAmount > 0;
+            if (mathBonusCounterText != null)
             {
-                return;
+                mathBonusCounterText.gameObject.SetActive(active);
             }
 
-            var active = levelController != null && levelController.MathBonusElement != null && requiredAmount > 0;
-            mathBonusCounterText.gameObject.SetActive(active);
+            if (mathBonusProgressFillRect != null)
+            {
+                mathBonusProgressFillRect.gameObject.SetActive(active);
+            }
+
             if (!active)
             {
+                ApplyMathBonusProgressShaderEffect(false);
                 return;
             }
 
-            mathBonusCounterText.text = $"{Mathf.Clamp(collectedAmount, 0, requiredAmount)}/{Mathf.Max(1, requiredAmount)}";
+            var visibleCollected = Mathf.Max(0, collectedAmount);
+            var safeRequired = Mathf.Max(1, requiredAmount);
+            if (mathBonusCounterText != null)
+            {
+                mathBonusCounterText.text = $"{visibleCollected}/{safeRequired}";
+            }
+
+            ApplyMathBonusProgressShaderEffect(visibleCollected >= safeRequired);
+            AnimateMathBonusProgressTo(Mathf.Clamp01(visibleCollected / (float)safeRequired));
         }
 
         private Match3GoalItemView CreateGoalView()
@@ -154,6 +198,212 @@ namespace Match3Foodie
             }
 
             return null;
+        }
+
+        private void CacheMathBonusProgressWidth()
+        {
+            if (mathBonusProgressFillRect == null)
+            {
+                cachedMathBonusProgressFullWidth = 0f;
+                return;
+            }
+
+            if (hasCachedMathBonusProgressLayout)
+            {
+                return;
+            }
+
+            if (mathBonusProgressFullWidth > 0f)
+            {
+                cachedMathBonusProgressFullWidth = mathBonusProgressFullWidth;
+            }
+            else if (mathBonusProgressBoundsRect != null && mathBonusProgressBoundsRect.rect.width > 0f)
+            {
+                cachedMathBonusProgressFullWidth = mathBonusProgressBoundsRect.rect.width;
+            }
+            else
+            {
+                cachedMathBonusProgressFullWidth = Mathf.Max(mathBonusProgressFillRect.rect.width, mathBonusProgressFillRect.sizeDelta.x);
+            }
+
+            mathBonusProgressAnchorMin = mathBonusProgressFillRect.anchorMin;
+            mathBonusProgressAnchorMax = mathBonusProgressFillRect.anchorMax;
+            mathBonusProgressOffsetMin = mathBonusProgressFillRect.offsetMin;
+            mathBonusProgressOffsetMax = mathBonusProgressFillRect.offsetMax;
+            mathBonusProgressUsesStretchAnchors = Mathf.Abs(mathBonusProgressAnchorMax.x - mathBonusProgressAnchorMin.x) > 0.001f;
+            hasCachedMathBonusProgressLayout = true;
+        }
+
+        private void AnimateMathBonusProgressTo(float progress)
+        {
+            if (mathBonusProgressFillRect == null)
+            {
+                return;
+            }
+
+            CacheMathBonusProgressWidth();
+            progress = Mathf.Clamp01(progress);
+
+            if (!Application.isPlaying || mathBonusProgressMotionDuration <= 0f)
+            {
+                SetMathBonusProgressWidth(progress);
+                return;
+            }
+
+            if (mathBonusProgressRoutine != null)
+            {
+                StopCoroutine(mathBonusProgressRoutine);
+            }
+
+            mathBonusProgressRoutine = StartCoroutine(MathBonusProgressRoutine(progress));
+        }
+
+        private IEnumerator MathBonusProgressRoutine(float targetProgress)
+        {
+            var startProgress = GetCurrentMathBonusProgress();
+            var elapsed = 0f;
+            var duration = Mathf.Max(0.01f, mathBonusProgressMotionDuration);
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var eased = EaseOutCubic(t);
+                ApplyMathBonusProgress(Mathf.LerpUnclamped(startProgress, targetProgress, eased));
+
+                var bump = Mathf.Sin(t * Mathf.PI) * (mathBonusProgressBumpScale - 1f);
+                mathBonusProgressFillRect.localScale = new Vector3(1f, 1f + bump, 1f);
+                yield return null;
+            }
+
+            ApplyMathBonusProgress(targetProgress);
+            mathBonusProgressFillRect.localScale = Vector3.one;
+            mathBonusProgressRoutine = null;
+        }
+
+        private void SetMathBonusProgressWidth(float progress)
+        {
+            if (mathBonusProgressFillRect == null)
+            {
+                return;
+            }
+
+            ApplyMathBonusProgress(progress);
+            mathBonusProgressFillRect.localScale = Vector3.one;
+        }
+
+        private float GetCurrentMathBonusProgress()
+        {
+            if (mathBonusProgressFillRect == null)
+            {
+                return 0f;
+            }
+
+            if (mathBonusProgressUsesStretchAnchors)
+            {
+                var span = Mathf.Max(0.0001f, mathBonusProgressAnchorMax.x - mathBonusProgressAnchorMin.x);
+                return Mathf.Clamp01((mathBonusProgressFillRect.anchorMax.x - mathBonusProgressAnchorMin.x) / span);
+            }
+
+            return cachedMathBonusProgressFullWidth <= 0f
+                ? 0f
+                : Mathf.Clamp01(mathBonusProgressFillRect.rect.width / cachedMathBonusProgressFullWidth);
+        }
+
+        private void ApplyMathBonusProgress(float progress)
+        {
+            if (mathBonusProgressFillRect == null)
+            {
+                return;
+            }
+
+            progress = Mathf.Clamp01(progress);
+
+            if (mathBonusProgressUsesStretchAnchors)
+            {
+                var anchorMax = mathBonusProgressAnchorMax;
+                anchorMax.x = Mathf.Lerp(mathBonusProgressAnchorMin.x, mathBonusProgressAnchorMax.x, progress);
+                mathBonusProgressFillRect.anchorMin = mathBonusProgressAnchorMin;
+                mathBonusProgressFillRect.anchorMax = anchorMax;
+                mathBonusProgressFillRect.offsetMin = mathBonusProgressOffsetMin;
+                mathBonusProgressFillRect.offsetMax = new Vector2(
+                    Mathf.Lerp(0f, mathBonusProgressOffsetMax.x, progress),
+                    mathBonusProgressOffsetMax.y);
+                return;
+            }
+
+            mathBonusProgressFillRect.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Horizontal,
+                Mathf.Max(0f, cachedMathBonusProgressFullWidth * progress));
+        }
+
+        private static float EaseOutCubic(float t)
+        {
+            return 1f - Mathf.Pow(1f - Mathf.Clamp01(t), 3f);
+        }
+
+        private void InitializeMathBonusProgressEffectMaterial()
+        {
+            if (mathBonusProgressEffectImage == null || mathBonusProgressMaterialInstance != null)
+            {
+                return;
+            }
+
+            mathBonusProgressOriginalMaterial = mathBonusProgressEffectImage.material;
+            var sourceMaterial = mathBonusProgressEffectImage.material != null
+                ? mathBonusProgressEffectImage.material
+                : mathBonusProgressEffectImage.materialForRendering;
+            if (sourceMaterial == null)
+            {
+                return;
+            }
+
+            mathBonusProgressMaterialInstance = Instantiate(sourceMaterial);
+            mathBonusProgressMaterialInstance.name = sourceMaterial.name + " (Math Bonus Progress Instance)";
+            mathBonusProgressEffectImage.material = mathBonusProgressMaterialInstance;
+            ApplyMathBonusProgressShaderEffect(false);
+        }
+
+        private void ApplyMathBonusProgressShaderEffect(bool active)
+        {
+            InitializeMathBonusProgressEffectMaterial();
+
+            if (mathBonusProgressMaterialInstance == null
+                || string.IsNullOrWhiteSpace(mathBonusProgressRainbowFadeProperty)
+                || !mathBonusProgressMaterialInstance.HasProperty(mathBonusProgressRainbowFadeProperty))
+            {
+                return;
+            }
+
+            var fade = active && enableMathBonusProgressRainbow
+                ? mathBonusProgressRainbowActiveFade
+                : mathBonusProgressRainbowInactiveFade;
+            mathBonusProgressMaterialInstance.SetFloat(mathBonusProgressRainbowFadeProperty, fade);
+        }
+
+        private void RestoreMathBonusProgressEffectMaterial()
+        {
+            if (mathBonusProgressEffectImage != null)
+            {
+                mathBonusProgressEffectImage.material = mathBonusProgressOriginalMaterial;
+            }
+
+            if (mathBonusProgressMaterialInstance == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(mathBonusProgressMaterialInstance);
+            }
+            else
+            {
+                DestroyImmediate(mathBonusProgressMaterialInstance);
+            }
+
+            mathBonusProgressMaterialInstance = null;
+            mathBonusProgressOriginalMaterial = null;
         }
     }
 }

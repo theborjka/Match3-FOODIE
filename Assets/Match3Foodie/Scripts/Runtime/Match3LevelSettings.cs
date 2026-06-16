@@ -29,6 +29,8 @@ namespace Match3Foodie
         [SerializeField] private Match3ElementDefinition mathBonusElement;
         [Tooltip("How many Dorblue collections fill the math counter before the popup starts.")]
         [SerializeField, Min(1)] private int mathBonusRequiredCollections = 5;
+        [Tooltip("How much the Dorblue counter requirement grows after each completed math popup.")]
+        [SerializeField, Min(0)] private int mathBonusRequiredIncreasePerChallenge = 0;
         [Tooltip("Delay after the board fully finishes resolving matches before the math popup opens.")]
         [SerializeField, Min(0f)] private float mathChallengeStartDelay = 0.5f;
 
@@ -37,6 +39,7 @@ namespace Match3Foodie
         public IReadOnlyList<Goal> Goals => goals;
         public Match3ElementDefinition MathBonusElement => mathBonusElement;
         public int MathBonusRequiredCollections => mathBonusRequiredCollections;
+        public int MathBonusRequiredIncreasePerChallenge => mathBonusRequiredIncreasePerChallenge;
         public float MathChallengeStartDelay => mathChallengeStartDelay;
     }
 }

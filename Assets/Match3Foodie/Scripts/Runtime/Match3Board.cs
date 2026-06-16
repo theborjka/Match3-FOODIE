@@ -49,6 +49,7 @@ namespace Match3Foodie
         [Header("Events")]
         [SerializeField] private PieceEvent pieceSelected = new();
         [SerializeField] private PieceEvent pieceCollected = new();
+        [SerializeField] private PieceEvent pieceCleared = new();
         [SerializeField] private PiecesEvent piecesMatched = new();
         [SerializeField] private UnityEvent boardSettled = new();
 
@@ -67,6 +68,7 @@ namespace Match3Foodie
         public bool IsResolving => isResolving;
         public PieceEvent PieceSelected => pieceSelected;
         public PieceEvent PieceCollected => pieceCollected;
+        public PieceEvent PieceCleared => pieceCleared;
         public PiecesEvent PiecesMatched => piecesMatched;
         public UnityEvent BoardSettled => boardSettled;
         public int Width => settings != null ? settings.Width : 0;
@@ -1054,6 +1056,8 @@ namespace Match3Foodie
             {
                 return 0f;
             }
+
+            pieceCleared.Invoke(piece);
 
             float duration;
             if (TryStartCollectionFlyer(piece, out var collectDuration))

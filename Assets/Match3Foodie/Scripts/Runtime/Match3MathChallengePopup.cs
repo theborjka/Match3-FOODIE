@@ -25,6 +25,13 @@ namespace Match3Foodie
         [SerializeField] private TMP_Text[] answerTexts = new TMP_Text[3];
         [SerializeField] private TMP_Text rewardAnnouncerText;
 
+        [Header("Progress")]
+        [SerializeField] private RectTransform progressFillRect;
+        [SerializeField] private RectTransform progressBoundsRect;
+        [SerializeField, Min(0f)] private float progressFullWidth;
+        [SerializeField, Min(0f)] private float progressMotionDuration = 0.22f;
+        [SerializeField, Min(1f)] private float progressBumpScale = 1.08f;
+
         [Header("Question")]
         [SerializeField, Min(1)] private int minOperand = 1;
         [SerializeField, Min(1)] private int maxOperand = 12;
@@ -64,8 +71,11 @@ namespace Match3Foodie
         private readonly List<Color> defaultButtonColors = new();
         private int correctAnswer;
         private int remainingQuestions;
+        private int totalQuestions;
         private int correctAnswers;
         private float rewardSecondsPerCorrectAnswer;
+        private float cachedProgressFullWidth;
+        private Coroutine progressRoutine;
         private bool isOpen;
         private bool isWaitingForFeedback;
         private Coroutine motionRoutine;
@@ -94,7 +104,8 @@ namespace Match3Foodie
             this.rewardSecondsPerCorrectAnswer = Mathf.Max(0f, rewardSecondsPerCorrectAnswer);
             isOpen = true;
             isWaitingForFeedback = false;
-            remainingQuestions = Mathf.Max(1, questionsPerGame);
+            totalQuestions = Mathf.Max(1, questionsPerGame);
+            remainingQuestions = totalQuestions;
             correctAnswers = 0;
 
             if (root != null)
@@ -104,6 +115,8 @@ namespace Match3Foodie
 
             PrepareMotionTargets();
             HideRewardAnnouncer(true);
+            CacheProgressWidth();
+            SetProgressImmediate(0f);
             GenerateQuestion();
             PlayShowMotion();
         }
@@ -190,6 +203,7 @@ namespace Match3Foodie
                 correctAnswers++;
             }
             remainingQuestions--;
+            AnimateProgressTo(GetAnsweredProgress());
 
             StartCoroutine(AnswerFeedbackRoutine(answer, wasCorrect));
         }
@@ -256,6 +270,9 @@ namespace Match3Foodie
             maxOperand = Mathf.Max(minOperand, maxOperand);
             questionsPerGame = Mathf.Max(1, questionsPerGame);
             answerFeedbackDelay = Mathf.Max(0f, answerFeedbackDelay);
+            progressFullWidth = Mathf.Max(0f, progressFullWidth);
+            progressMotionDuration = Mathf.Max(0f, progressMotionDuration);
+            progressBumpScale = Mathf.Max(1f, progressBumpScale);
             showDuration = Mathf.Max(0f, showDuration);
             hideDuration = Mathf.Max(0f, hideDuration);
             rewardShowDuration = Mathf.Max(0f, rewardShowDuration);
@@ -279,6 +296,113 @@ namespace Match3Foodie
                     SetButtonColor(answerButtons[i], defaultButtonColors[i]);
                 }
             }
+        }
+
+        private float GetAnsweredProgress()
+        {
+            if (totalQuestions <= 0)
+            {
+                return 0f;
+            }
+
+            var answered = Mathf.Clamp(totalQuestions - remainingQuestions, 0, totalQuestions);
+            return answered / (float)totalQuestions;
+        }
+
+        private void CacheProgressWidth()
+        {
+            if (progressFillRect == null)
+            {
+                cachedProgressFullWidth = 0f;
+                return;
+            }
+
+            if (progressFullWidth > 0f)
+            {
+                cachedProgressFullWidth = progressFullWidth;
+                return;
+            }
+
+            if (progressBoundsRect != null && progressBoundsRect.rect.width > 0f)
+            {
+                cachedProgressFullWidth = progressBoundsRect.rect.width;
+                return;
+            }
+
+            if (progressFillRect.rect.width > 0f)
+            {
+                cachedProgressFullWidth = progressFillRect.rect.width;
+                return;
+            }
+
+            cachedProgressFullWidth = Mathf.Max(0f, progressFillRect.sizeDelta.x);
+        }
+
+        private void SetProgressImmediate(float progress)
+        {
+            if (progressRoutine != null)
+            {
+                StopCoroutine(progressRoutine);
+                progressRoutine = null;
+            }
+
+            SetProgressWidth(Mathf.Clamp01(progress));
+            if (progressFillRect != null)
+            {
+                progressFillRect.localScale = Vector3.one;
+            }
+        }
+
+        private void AnimateProgressTo(float progress)
+        {
+            if (progressFillRect == null)
+            {
+                return;
+            }
+
+            if (progressRoutine != null)
+            {
+                StopCoroutine(progressRoutine);
+            }
+
+            progressRoutine = StartCoroutine(ProgressRoutine(Mathf.Clamp01(progress)));
+        }
+
+        private IEnumerator ProgressRoutine(float targetProgress)
+        {
+            var startWidth = progressFillRect.rect.width;
+            var targetWidth = cachedProgressFullWidth * targetProgress;
+            var elapsed = 0f;
+            var duration = Mathf.Max(0.01f, progressMotionDuration);
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var eased = EaseOutCubic(t);
+                var width = Mathf.LerpUnclamped(startWidth, targetWidth, eased);
+                progressFillRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mathf.Max(0f, width));
+
+                var bump = Mathf.Sin(t * Mathf.PI) * (progressBumpScale - 1f);
+                progressFillRect.localScale = new Vector3(1f, 1f + bump, 1f);
+                yield return null;
+            }
+
+            progressFillRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mathf.Max(0f, targetWidth));
+            progressFillRect.localScale = Vector3.one;
+            progressRoutine = null;
+        }
+
+        private void SetProgressWidth(float progress)
+        {
+            if (progressFillRect == null)
+            {
+                return;
+            }
+
+            progressFillRect.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Horizontal,
+                Mathf.Max(0f, cachedProgressFullWidth * progress));
         }
 
         private void CacheDefaultButtonColors()
@@ -638,6 +762,11 @@ namespace Match3Foodie
         private static float EaseInOut(float t)
         {
             return t < 0.5f ? 2f * t * t : 1f - Mathf.Pow(-2f * t + 2f, 2f) * 0.5f;
+        }
+
+        private static float EaseOutCubic(float t)
+        {
+            return 1f - Mathf.Pow(1f - Mathf.Clamp01(t), 3f);
         }
     }
 }

@@ -47,6 +47,7 @@ namespace Match3Foodie
         private readonly List<Match3GoalProgress> goalProgress = new();
         private float remainingTime;
         private int mathBonusCollectedAmount;
+        private int currentMathBonusRequiredCollections;
         private bool timerRunning;
         private bool levelEnded;
         private bool mathChallengePending;
@@ -56,7 +57,7 @@ namespace Match3Foodie
         public Match3LevelSettings LevelSettings => levelSettings;
         public float RemainingTime => remainingTime;
         public int MathBonusCollectedAmount => mathBonusCollectedAmount;
-        public int MathBonusRequiredCollections => levelSettings != null ? levelSettings.MathBonusRequiredCollections : 0;
+        public int MathBonusRequiredCollections => currentMathBonusRequiredCollections;
         public Match3ElementDefinition MathBonusElement => ResolveMathBonusElement();
         public bool IsTimerRunning => timerRunning;
         public bool IsLevelEnded => levelEnded;
@@ -93,7 +94,7 @@ namespace Match3Foodie
             if (board != null)
             {
                 board.PieceCollected.AddListener(HandlePieceCollected);
-                board.PiecesMatched.AddListener(HandlePiecesMatched);
+                board.PieceCleared.AddListener(HandlePieceClearedForMathBonus);
                 board.BoardSettled.AddListener(HandleBoardSettled);
             }
 
@@ -108,7 +109,7 @@ namespace Match3Foodie
             if (board != null)
             {
                 board.PieceCollected.RemoveListener(HandlePieceCollected);
-                board.PiecesMatched.RemoveListener(HandlePiecesMatched);
+                board.PieceCleared.RemoveListener(HandlePieceClearedForMathBonus);
                 board.BoardSettled.RemoveListener(HandleBoardSettled);
             }
         }
@@ -145,6 +146,7 @@ namespace Match3Foodie
             goalProgress.Clear();
             remainingTime = levelSettings != null ? levelSettings.TimeLimitSeconds : 0f;
             mathBonusCollectedAmount = 0;
+            currentMathBonusRequiredCollections = GetBaseMathBonusRequiredCollections();
             mathChallengePending = false;
             mathChallengeRunning = false;
             timerRunning = false;
@@ -262,7 +264,7 @@ namespace Match3Foodie
                 return;
             }
 
-            var required = Mathf.Max(1, levelSettings.MathBonusRequiredCollections);
+            var required = Mathf.Max(1, MathBonusRequiredCollections);
             mathBonusCollectedAmount = required;
             mathChallengePending = true;
             mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, required);
@@ -306,33 +308,19 @@ namespace Match3Foodie
             }
         }
 
-        private void HandlePiecesMatched(List<Match3PieceView> matchedPieces)
+        private void HandlePieceClearedForMathBonus(Match3PieceView clearedPiece)
         {
             if (levelSettings == null
                 || MathBonusElement == null
-                || matchedPieces == null
-                || mathChallengePending
+                || clearedPiece == null
+                || clearedPiece.Definition != MathBonusElement
                 || mathChallengeRunning)
             {
                 return;
             }
 
-            var required = Mathf.Max(1, levelSettings.MathBonusRequiredCollections);
-            var collectedThisMatch = 0;
-            foreach (var piece in matchedPieces)
-            {
-                if (piece != null && piece.Definition == MathBonusElement)
-                {
-                    collectedThisMatch++;
-                }
-            }
-
-            if (collectedThisMatch <= 0)
-            {
-                return;
-            }
-
-            mathBonusCollectedAmount = Mathf.Min(required, mathBonusCollectedAmount + collectedThisMatch);
+            var required = Mathf.Max(1, MathBonusRequiredCollections);
+            mathBonusCollectedAmount++;
             mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, required);
 
             if (mathBonusCollectedAmount >= required)
@@ -354,6 +342,7 @@ namespace Match3Foodie
         private IEnumerator StartPendingMathChallengeRoutine()
         {
             mathChallengeRunning = true;
+            var consumedRequiredAmount = Mathf.Max(1, MathBonusRequiredCollections);
             var boardInputShouldResume = !levelEnded;
             board?.SetInputEnabled(false);
 
@@ -409,11 +398,35 @@ namespace Match3Foodie
 
             boosterController?.SetControlsLocked(false);
 
-            mathBonusCollectedAmount = 0;
-            mathChallengePending = false;
+            mathBonusCollectedAmount = Mathf.Max(0, mathBonusCollectedAmount - consumedRequiredAmount);
+            IncreaseMathBonusRequirementAfterChallenge();
+            mathChallengePending = mathBonusCollectedAmount >= Mathf.Max(1, MathBonusRequiredCollections);
             mathChallengeRunning = false;
             mathChallengeRoutine = null;
             mathBonusCounterChanged.Invoke(mathBonusCollectedAmount, MathBonusRequiredCollections);
+
+            if (mathChallengePending)
+            {
+                HandleBoardSettled();
+            }
+        }
+
+        private int GetBaseMathBonusRequiredCollections()
+        {
+            return levelSettings != null ? Mathf.Max(1, levelSettings.MathBonusRequiredCollections) : 0;
+        }
+
+        private void IncreaseMathBonusRequirementAfterChallenge()
+        {
+            if (levelSettings == null)
+            {
+                currentMathBonusRequiredCollections = 0;
+                return;
+            }
+
+            currentMathBonusRequiredCollections = Mathf.Max(
+                1,
+                currentMathBonusRequiredCollections + levelSettings.MathBonusRequiredIncreasePerChallenge);
         }
 
         private Match3ElementDefinition ResolveMathBonusElement()
