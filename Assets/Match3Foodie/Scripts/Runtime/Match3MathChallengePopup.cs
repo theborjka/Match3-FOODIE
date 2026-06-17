@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
@@ -10,6 +11,8 @@ namespace Match3Foodie
 {
     public sealed class Match3MathChallengePopup : MonoBehaviour
     {
+        [Serializable] public sealed class FloatEvent : UnityEvent<float> { }
+
         private enum RewardVfxSpace
         {
             World,
@@ -67,6 +70,11 @@ namespace Match3Foodie
         [SerializeField] private int rewardVfxSortingOrder = 500;
         [SerializeField, Min(0f)] private float rewardVfxLifetime = 1.5f;
 
+        [Header("Events")]
+        [SerializeField] private UnityEvent correctAnswerSelected = new();
+        [SerializeField] private UnityEvent wrongAnswerSelected = new();
+        [SerializeField] private FloatEvent rewardArrived = new();
+
         private Action<int> completed;
         private readonly List<Color> defaultButtonColors = new();
         private int correctAnswer;
@@ -74,6 +82,7 @@ namespace Match3Foodie
         private int totalQuestions;
         private int correctAnswers;
         private float rewardSecondsPerCorrectAnswer;
+        private float currentRewardSeconds;
         private float cachedProgressFullWidth;
         private Coroutine progressRoutine;
         private bool isOpen;
@@ -82,6 +91,9 @@ namespace Match3Foodie
 
         public bool IsOpen => isOpen;
         public int QuestionsPerGame => questionsPerGame;
+        public UnityEvent CorrectAnswerSelected => correctAnswerSelected;
+        public UnityEvent WrongAnswerSelected => wrongAnswerSelected;
+        public FloatEvent RewardArrived => rewardArrived;
 
         private void Awake()
         {
@@ -201,6 +213,11 @@ namespace Match3Foodie
             if (wasCorrect)
             {
                 correctAnswers++;
+                correctAnswerSelected.Invoke();
+            }
+            else
+            {
+                wrongAnswerSelected.Invoke();
             }
             remainingQuestions--;
             AnimateProgressTo(GetAnsweredProgress());
@@ -461,6 +478,7 @@ namespace Match3Foodie
             }
 
             HideRewardAnnouncer(true);
+            currentRewardSeconds = rewardSeconds;
             rewardAnnouncerText.text = rewardSeconds > 0f
                 ? string.Format(rewardTextFormat, rewardSeconds)
                 : "Correct!";
@@ -506,6 +524,7 @@ namespace Match3Foodie
                 }
 
                 transformToAnimate.position = rewardFlyTarget.position;
+                rewardArrived.Invoke(currentRewardSeconds);
 
                 elapsed = 0f;
                 var popDuration = Mathf.Max(0.01f, rewardArrivePopDuration);

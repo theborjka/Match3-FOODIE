@@ -14,6 +14,11 @@ namespace Match3Foodie
         [Header("Timer")]
         [SerializeField] private TMP_Text timerText;
         [SerializeField] private Image timerProgressImage;
+        [SerializeField, Min(0f)] private float timerWarningThreshold = 10f;
+        [SerializeField] private Color timerNormalColor = Color.white;
+        [SerializeField] private Color timerWarningColor = Color.red;
+        [SerializeField, Min(1f)] private float timerWarningPulseScale = 1.14f;
+        [SerializeField, Min(0f)] private float timerWarningPulseDuration = 0.16f;
 
         [Header("Goals")]
         [SerializeField] private Transform goalsRoot;
@@ -44,8 +49,10 @@ namespace Match3Foodie
         private Vector2 mathBonusProgressOffsetMin;
         private Vector2 mathBonusProgressOffsetMax;
         private Coroutine mathBonusProgressRoutine;
+        private Coroutine timerWarningPulseRoutine;
         private Material mathBonusProgressOriginalMaterial;
         private Material mathBonusProgressMaterialInstance;
+        private int lastWarningTimerSecond = -1;
 
         private void Awake()
         {
@@ -120,6 +127,7 @@ namespace Match3Foodie
             {
                 var seconds = Mathf.CeilToInt(remainingSeconds);
                 timerText.text = seconds.ToString();
+                RefreshTimerWarningVisual(remainingSeconds, seconds);
             }
 
             if (timerProgressImage != null && levelController != null && levelController.LevelSettings != null)
@@ -127,6 +135,63 @@ namespace Match3Foodie
                 var timeLimit = Mathf.Max(0.01f, levelController.LevelSettings.TimeLimitSeconds);
                 timerProgressImage.fillAmount = Mathf.Clamp01(remainingSeconds / timeLimit);
             }
+        }
+
+        private void RefreshTimerWarningVisual(float remainingSeconds, int wholeSeconds)
+        {
+            if (timerText == null)
+            {
+                return;
+            }
+
+            var warningActive = remainingSeconds > 0f && remainingSeconds <= timerWarningThreshold;
+            timerText.color = warningActive ? timerWarningColor : timerNormalColor;
+
+            if (!warningActive)
+            {
+                lastWarningTimerSecond = -1;
+                if (timerWarningPulseRoutine != null)
+                {
+                    StopCoroutine(timerWarningPulseRoutine);
+                    timerWarningPulseRoutine = null;
+                }
+
+                timerText.transform.localScale = Vector3.one;
+                return;
+            }
+
+            if (wholeSeconds != lastWarningTimerSecond)
+            {
+                lastWarningTimerSecond = wholeSeconds;
+                if (timerWarningPulseRoutine != null)
+                {
+                    StopCoroutine(timerWarningPulseRoutine);
+                }
+
+                timerWarningPulseRoutine = StartCoroutine(TimerWarningPulseRoutine());
+            }
+        }
+
+        private IEnumerator TimerWarningPulseRoutine()
+        {
+            if (timerText == null)
+            {
+                yield break;
+            }
+
+            var elapsed = 0f;
+            var duration = Mathf.Max(0.01f, timerWarningPulseDuration);
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var pulse = Mathf.Sin(t * Mathf.PI) * (timerWarningPulseScale - 1f);
+                timerText.transform.localScale = Vector3.one * (1f + pulse);
+                yield return null;
+            }
+
+            timerText.transform.localScale = Vector3.one;
+            timerWarningPulseRoutine = null;
         }
 
         private void RefreshGoals(List<Match3GoalProgress> goals)

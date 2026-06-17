@@ -41,6 +41,7 @@ namespace Match3Foodie
         [SerializeField] private GoalProgressEvent goalChanged = new();
         [SerializeField] private GoalsProgressEvent goalsChanged = new();
         [SerializeField] private IntPairEvent mathBonusCounterChanged = new();
+        [SerializeField] private UnityEvent mathChallengeStarted = new();
         [SerializeField] private UnityEvent levelCompleted = new();
         [SerializeField] private UnityEvent levelFailed = new();
 
@@ -52,6 +53,7 @@ namespace Match3Foodie
         private bool levelEnded;
         private bool mathChallengePending;
         private bool mathChallengeRunning;
+        private bool levelCompletePending;
         private Coroutine mathChallengeRoutine;
 
         public Match3LevelSettings LevelSettings => levelSettings;
@@ -66,6 +68,7 @@ namespace Match3Foodie
         public GoalProgressEvent GoalChanged => goalChanged;
         public GoalsProgressEvent GoalsChanged => goalsChanged;
         public IntPairEvent MathBonusCounterChanged => mathBonusCounterChanged;
+        public UnityEvent MathChallengeStarted => mathChallengeStarted;
         public UnityEvent LevelCompleted => levelCompleted;
         public UnityEvent LevelFailed => levelFailed;
 
@@ -149,6 +152,7 @@ namespace Match3Foodie
             currentMathBonusRequiredCollections = GetBaseMathBonusRequiredCollections();
             mathChallengePending = false;
             mathChallengeRunning = false;
+            levelCompletePending = false;
             timerRunning = false;
             levelEnded = false;
 
@@ -304,7 +308,7 @@ namespace Match3Foodie
 
             if (AreAllGoalsComplete())
             {
-                CompleteLevel();
+                RequestCompleteLevel();
             }
         }
 
@@ -331,6 +335,12 @@ namespace Match3Foodie
 
         private void HandleBoardSettled()
         {
+            if (levelCompletePending)
+            {
+                CompleteLevel();
+                return;
+            }
+
             if (levelEnded || !mathChallengePending || mathChallengeRunning || mathChallengeRoutine != null)
             {
                 return;
@@ -371,6 +381,7 @@ namespace Match3Foodie
 
                 var answered = false;
                 var correctAnswers = 0;
+                mathChallengeStarted.Invoke();
                 mathChallengePopup.Show(mathBonusElement.MathBonusSeconds, count =>
                 {
                     answered = true;
@@ -492,6 +503,22 @@ namespace Match3Foodie
             return true;
         }
 
+        private void RequestCompleteLevel()
+        {
+            if (levelEnded || levelCompletePending)
+            {
+                return;
+            }
+
+            if (board != null && board.IsResolving)
+            {
+                levelCompletePending = true;
+                return;
+            }
+
+            CompleteLevel();
+        }
+
         private void CompleteLevel()
         {
             if (levelEnded)
@@ -500,6 +527,7 @@ namespace Match3Foodie
             }
 
             levelEnded = true;
+            levelCompletePending = false;
             timerRunning = false;
 
             if (disableBoardWhenLevelEnds && board != null)
@@ -507,6 +535,7 @@ namespace Match3Foodie
                 board.SetInputEnabled(false);
             }
 
+            boosterController?.SetControlsLocked(true);
             levelCompleted.Invoke();
         }
 

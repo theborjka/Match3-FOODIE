@@ -152,7 +152,7 @@ namespace Match3Foodie
 
         public IEnumerator PlayDestroyRoutine()
         {
-            SpawnDestroyEffect();
+            PlayDestroyEffect();
 
             var elapsed = 0f;
             var startScale = transform.localScale;
@@ -164,6 +164,16 @@ namespace Match3Foodie
                 transform.localScale = startScale * scale;
                 yield return null;
             }
+        }
+
+        public void PlayDestroyEffect()
+        {
+            if (Definition == null || Definition.DestructionEffectPrefab == null)
+            {
+                return;
+            }
+
+            Instantiate(Definition.DestructionEffectPrefab, transform.position, Quaternion.identity, board.transform);
         }
 
         private IEnumerator MoveRoutine(Vector3 target, float duration)
@@ -274,7 +284,7 @@ namespace Match3Foodie
 
             transform.position = target;
             onArrived?.Invoke();
-            SpawnDestroyEffect();
+            PlayDestroyEffect();
 
             elapsed = 0f;
             var popDuration = Mathf.Max(0.01f, arrivePopDuration);
@@ -442,16 +452,6 @@ namespace Match3Foodie
             {
                 spriteRenderer.sortingOrder = baseSortingOrder;
             }
-        }
-
-        private void SpawnDestroyEffect()
-        {
-            if (Definition == null || Definition.DestructionEffectPrefab == null)
-            {
-                return;
-            }
-
-            Instantiate(Definition.DestructionEffectPrefab, transform.position, Quaternion.identity, board.transform);
         }
 
         private void Reset()

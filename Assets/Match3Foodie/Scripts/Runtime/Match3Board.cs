@@ -192,6 +192,7 @@ namespace Match3Foodie
             {
                 collectionTargetProvider = FindAnyObjectByType<Match3CollectionTargetProvider>();
             }
+
         }
 
         private void Start()
@@ -1062,6 +1063,7 @@ namespace Match3Foodie
             float duration;
             if (TryStartCollectionFlyer(piece, out var collectDuration))
             {
+                piece.PlayDestroyEffect();
                 ScheduleDestroyPiece(piece, collectDuration);
                 return collectDuration;
             }
@@ -1376,7 +1378,8 @@ namespace Match3Foodie
 
                     if (SameDefinition(origin, pieces[x + 1, y])
                         && SameDefinition(origin, pieces[x, y + 1])
-                        && SameDefinition(origin, pieces[x + 1, y + 1]))
+                        && SameDefinition(origin, pieces[x + 1, y + 1])
+                        && IsExactSquareMatch(x, y, origin))
                     {
                         matches.Add(origin);
                         matches.Add(pieces[x + 1, y]);
@@ -1385,6 +1388,27 @@ namespace Match3Foodie
                     }
                 }
             }
+        }
+
+        private bool IsExactSquareMatch(int x, int y, Match3PieceView origin)
+        {
+            return !SameDefinitionAt(origin, x - 1, y)
+                && !SameDefinitionAt(origin, x - 1, y + 1)
+                && !SameDefinitionAt(origin, x + 2, y)
+                && !SameDefinitionAt(origin, x + 2, y + 1)
+                && !SameDefinitionAt(origin, x, y - 1)
+                && !SameDefinitionAt(origin, x + 1, y - 1)
+                && !SameDefinitionAt(origin, x, y + 2)
+                && !SameDefinitionAt(origin, x + 1, y + 2);
+        }
+
+        private bool SameDefinitionAt(Match3PieceView origin, int x, int y)
+        {
+            return x >= 0
+                && x < settings.Width
+                && y >= 0
+                && y < settings.Height
+                && SameDefinition(origin, pieces[x, y]);
         }
 
         private void FindTShapeMatches(HashSet<Match3PieceView> matches)
@@ -1404,15 +1428,10 @@ namespace Match3Foodie
                     var down = CountSameDirection(x, y, 0, -1);
                     var up = CountSameDirection(x, y, 0, 1);
 
-                    var horizontalBar = left > 0 && right > 0;
-                    var verticalStem = down > 0 || up > 0;
-                    var verticalBar = down > 0 && up > 0;
-                    var horizontalStem = left > 0 || right > 0;
-
-                    if ((horizontalBar && verticalStem) || (verticalBar && horizontalStem))
-                    {
-                        AddDirectionalPattern(matches, x, y, left, right, down, up);
-                    }
+                    AddTShapeIfMatch(matches, x, y, -1, 0, 1, 0, 0, -1, left, right, down);
+                    AddTShapeIfMatch(matches, x, y, -1, 0, 1, 0, 0, 1, left, right, up);
+                    AddTShapeIfMatch(matches, x, y, 0, -1, 0, 1, -1, 0, down, up, left);
+                    AddTShapeIfMatch(matches, x, y, 0, -1, 0, 1, 1, 0, down, up, right);
                 }
             }
         }
@@ -1434,10 +1453,7 @@ namespace Match3Foodie
                     var down = CountSameDirection(x, y, 0, -1);
                     var up = CountSameDirection(x, y, 0, 1);
 
-                    if (left > 0 && right > 0 && down > 0 && up > 0)
-                    {
-                        AddDirectionalPattern(matches, x, y, left, right, down, up);
-                    }
+                    AddCrossIfMatch(matches, x, y, left, right, down, up);
                 }
             }
         }
@@ -1488,6 +1504,45 @@ namespace Match3Foodie
             AddDirectionalArm(matches, centerX, centerY, secondDeltaX, secondDeltaY, 2);
         }
 
+        private void AddTShapeIfMatch(
+            HashSet<Match3PieceView> matches,
+            int centerX,
+            int centerY,
+            int barFirstDeltaX,
+            int barFirstDeltaY,
+            int barSecondDeltaX,
+            int barSecondDeltaY,
+            int stemDeltaX,
+            int stemDeltaY,
+            int barFirstLength,
+            int barSecondLength,
+            int stemLength)
+        {
+            if (barFirstLength < 1 || barSecondLength < 1 || stemLength < 2)
+            {
+                return;
+            }
+
+            matches.Add(pieces[centerX, centerY]);
+            AddDirectionalArm(matches, centerX, centerY, barFirstDeltaX, barFirstDeltaY, 1);
+            AddDirectionalArm(matches, centerX, centerY, barSecondDeltaX, barSecondDeltaY, 1);
+            AddDirectionalArm(matches, centerX, centerY, stemDeltaX, stemDeltaY, 2);
+        }
+
+        private void AddCrossIfMatch(HashSet<Match3PieceView> matches, int centerX, int centerY, int left, int right, int down, int up)
+        {
+            if (left < 1 || right < 1 || down < 1 || up < 1)
+            {
+                return;
+            }
+
+            matches.Add(pieces[centerX, centerY]);
+            AddDirectionalArm(matches, centerX, centerY, -1, 0, 1);
+            AddDirectionalArm(matches, centerX, centerY, 1, 0, 1);
+            AddDirectionalArm(matches, centerX, centerY, 0, -1, 1);
+            AddDirectionalArm(matches, centerX, centerY, 0, 1, 1);
+        }
+
         private int CountSameDirection(int startX, int startY, int deltaX, int deltaY)
         {
             var center = pieces[startX, startY];
@@ -1508,15 +1563,6 @@ namespace Match3Foodie
             }
 
             return count;
-        }
-
-        private void AddDirectionalPattern(HashSet<Match3PieceView> matches, int centerX, int centerY, int left, int right, int down, int up)
-        {
-            matches.Add(pieces[centerX, centerY]);
-            AddDirectionalArm(matches, centerX, centerY, -1, 0, left);
-            AddDirectionalArm(matches, centerX, centerY, 1, 0, right);
-            AddDirectionalArm(matches, centerX, centerY, 0, -1, down);
-            AddDirectionalArm(matches, centerX, centerY, 0, 1, up);
         }
 
         private void AddDirectionalArm(HashSet<Match3PieceView> matches, int centerX, int centerY, int deltaX, int deltaY, int length)
@@ -1763,7 +1809,8 @@ namespace Match3Foodie
                     if (definition != null
                         && definitions[x + 1, y] == definition
                         && definitions[x, y + 1] == definition
-                        && definitions[x + 1, y + 1] == definition)
+                        && definitions[x + 1, y + 1] == definition
+                        && IsExactSquareMatch(definitions, x, y, definition))
                     {
                         return true;
                     }
@@ -1771,6 +1818,27 @@ namespace Match3Foodie
             }
 
             return false;
+        }
+
+        private bool IsExactSquareMatch(Match3ElementDefinition[,] definitions, int x, int y, Match3ElementDefinition definition)
+        {
+            return !SameDefinitionAt(definitions, definition, x - 1, y)
+                && !SameDefinitionAt(definitions, definition, x - 1, y + 1)
+                && !SameDefinitionAt(definitions, definition, x + 2, y)
+                && !SameDefinitionAt(definitions, definition, x + 2, y + 1)
+                && !SameDefinitionAt(definitions, definition, x, y - 1)
+                && !SameDefinitionAt(definitions, definition, x + 1, y - 1)
+                && !SameDefinitionAt(definitions, definition, x, y + 2)
+                && !SameDefinitionAt(definitions, definition, x + 1, y + 2);
+        }
+
+        private bool SameDefinitionAt(Match3ElementDefinition[,] definitions, Match3ElementDefinition definition, int x, int y)
+        {
+            return x >= 0
+                && x < settings.Width
+                && y >= 0
+                && y < settings.Height
+                && definitions[x, y] == definition;
         }
 
         private bool HasTShapeMatch(Match3ElementDefinition[,] definitions)
@@ -1789,8 +1857,8 @@ namespace Match3Foodie
                     var down = CountSameDirection(definitions, x, y, 0, -1);
                     var up = CountSameDirection(definitions, x, y, 0, 1);
 
-                    if ((left > 0 && right > 0 && (down > 0 || up > 0))
-                        || (down > 0 && up > 0 && (left > 0 || right > 0)))
+                    if ((left >= 1 && right >= 1 && (down >= 2 || up >= 2))
+                        || (down >= 1 && up >= 1 && (left >= 2 || right >= 2)))
                     {
                         return true;
                     }
