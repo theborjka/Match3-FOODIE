@@ -1303,11 +1303,6 @@ namespace Match3Foodie
         {
             var matches = new HashSet<Match3PieceView>();
 
-            if (settings.MatchLines)
-            {
-                FindLineMatches(matches);
-            }
-
             if (settings.MatchSquares)
             {
                 FindSquareMatches(matches);
@@ -1326,6 +1321,11 @@ namespace Match3Foodie
             if (settings.MatchCorners)
             {
                 FindCornerMatches(matches);
+            }
+
+            if (settings.MatchLines)
+            {
+                FindLineMatches(matches);
             }
 
             return matches;
@@ -1378,8 +1378,7 @@ namespace Match3Foodie
 
                     if (SameDefinition(origin, pieces[x + 1, y])
                         && SameDefinition(origin, pieces[x, y + 1])
-                        && SameDefinition(origin, pieces[x + 1, y + 1])
-                        && IsExactSquareMatch(x, y, origin))
+                        && SameDefinition(origin, pieces[x + 1, y + 1]))
                     {
                         matches.Add(origin);
                         matches.Add(pieces[x + 1, y]);
@@ -1388,27 +1387,6 @@ namespace Match3Foodie
                     }
                 }
             }
-        }
-
-        private bool IsExactSquareMatch(int x, int y, Match3PieceView origin)
-        {
-            return !SameDefinitionAt(origin, x - 1, y)
-                && !SameDefinitionAt(origin, x - 1, y + 1)
-                && !SameDefinitionAt(origin, x + 2, y)
-                && !SameDefinitionAt(origin, x + 2, y + 1)
-                && !SameDefinitionAt(origin, x, y - 1)
-                && !SameDefinitionAt(origin, x + 1, y - 1)
-                && !SameDefinitionAt(origin, x, y + 2)
-                && !SameDefinitionAt(origin, x + 1, y + 2);
-        }
-
-        private bool SameDefinitionAt(Match3PieceView origin, int x, int y)
-        {
-            return x >= 0
-                && x < settings.Width
-                && y >= 0
-                && y < settings.Height
-                && SameDefinition(origin, pieces[x, y]);
         }
 
         private void FindTShapeMatches(HashSet<Match3PieceView> matches)
@@ -1583,6 +1561,15 @@ namespace Match3Foodie
             for (var i = 0; i < length; i++)
             {
                 var piece = horizontal ? pieces[x + i, y] : pieces[x, y + i];
+                if (piece != null && matches.Contains(piece))
+                {
+                    return;
+                }
+            }
+
+            for (var i = 0; i < length; i++)
+            {
+                var piece = horizontal ? pieces[x + i, y] : pieces[x, y + i];
                 if (piece != null)
                 {
                     matches.Add(piece);
@@ -1745,11 +1732,6 @@ namespace Match3Foodie
 
         private bool HasAnyMatch(Match3ElementDefinition[,] definitions)
         {
-            if (settings.MatchLines && HasLineMatch(definitions))
-            {
-                return true;
-            }
-
             if (settings.MatchSquares && HasSquareMatch(definitions))
             {
                 return true;
@@ -1765,7 +1747,12 @@ namespace Match3Foodie
                 return true;
             }
 
-            return settings.MatchCrosses && HasCrossMatch(definitions);
+            if (settings.MatchCrosses && HasCrossMatch(definitions))
+            {
+                return true;
+            }
+
+            return settings.MatchLines && HasLineMatch(definitions);
         }
 
         private bool HasLineMatch(Match3ElementDefinition[,] definitions)
@@ -1809,8 +1796,7 @@ namespace Match3Foodie
                     if (definition != null
                         && definitions[x + 1, y] == definition
                         && definitions[x, y + 1] == definition
-                        && definitions[x + 1, y + 1] == definition
-                        && IsExactSquareMatch(definitions, x, y, definition))
+                        && definitions[x + 1, y + 1] == definition)
                     {
                         return true;
                     }
@@ -1818,27 +1804,6 @@ namespace Match3Foodie
             }
 
             return false;
-        }
-
-        private bool IsExactSquareMatch(Match3ElementDefinition[,] definitions, int x, int y, Match3ElementDefinition definition)
-        {
-            return !SameDefinitionAt(definitions, definition, x - 1, y)
-                && !SameDefinitionAt(definitions, definition, x - 1, y + 1)
-                && !SameDefinitionAt(definitions, definition, x + 2, y)
-                && !SameDefinitionAt(definitions, definition, x + 2, y + 1)
-                && !SameDefinitionAt(definitions, definition, x, y - 1)
-                && !SameDefinitionAt(definitions, definition, x + 1, y - 1)
-                && !SameDefinitionAt(definitions, definition, x, y + 2)
-                && !SameDefinitionAt(definitions, definition, x + 1, y + 2);
-        }
-
-        private bool SameDefinitionAt(Match3ElementDefinition[,] definitions, Match3ElementDefinition definition, int x, int y)
-        {
-            return x >= 0
-                && x < settings.Width
-                && y >= 0
-                && y < settings.Height
-                && definitions[x, y] == definition;
         }
 
         private bool HasTShapeMatch(Match3ElementDefinition[,] definitions)
