@@ -15,7 +15,7 @@ namespace Match3Foodie
         [SerializeField, Min(0.01f)] private float maximumDeltaTime = 1f / 20f;
 
         [Header("Render Cost")]
-        [SerializeField, Range(0.5f, 1f)] private float webGLRenderBufferScale = 0.85f;
+        [SerializeField, Range(0.5f, 1f)] private float webGLRenderBufferScale = 1f;
 
         private void Awake()
         {
@@ -54,7 +54,7 @@ namespace Match3Foodie
             QualitySettings.vSyncCount = 0;
             QualitySettings.antiAliasing = 0;
             Application.targetFrameRate = 60;
-            ScalableBufferManager.ResizeBuffers(0.85f, 0.85f);
+            ScalableBufferManager.ResizeBuffers(1f, 1f);
             Time.fixedDeltaTime = 1f / 60f;
             Time.maximumDeltaTime = 1f / 20f;
 #endif
