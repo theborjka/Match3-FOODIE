@@ -14,6 +14,9 @@ namespace Match3Foodie
         [SerializeField, Min(0.001f)] private float fixedDeltaTime = 1f / 60f;
         [SerializeField, Min(0.01f)] private float maximumDeltaTime = 1f / 20f;
 
+        [Header("Render Cost")]
+        [SerializeField, Range(0.5f, 1f)] private float webGLRenderBufferScale = 0.85f;
+
         private void Awake()
         {
             Apply();
@@ -26,14 +29,17 @@ namespace Match3Foodie
             vSyncCount = Mathf.Max(0, vSyncCount);
             fixedDeltaTime = Mathf.Max(0.001f, fixedDeltaTime);
             maximumDeltaTime = Mathf.Max(0.01f, maximumDeltaTime);
+            webGLRenderBufferScale = Mathf.Clamp(webGLRenderBufferScale, 0.5f, 1f);
         }
 
         [ContextMenu("Apply Performance Settings")]
         public void Apply()
         {
             QualitySettings.vSyncCount = vSyncCount;
+            QualitySettings.antiAliasing = 0;
 #if UNITY_WEBGL && !UNITY_EDITOR
             Application.targetFrameRate = targetFrameRate;
+            ScalableBufferManager.ResizeBuffers(webGLRenderBufferScale, webGLRenderBufferScale);
 #else
             Application.targetFrameRate = editorTargetFrameRate;
 #endif
@@ -46,7 +52,9 @@ namespace Match3Foodie
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             QualitySettings.vSyncCount = 0;
+            QualitySettings.antiAliasing = 0;
             Application.targetFrameRate = 60;
+            ScalableBufferManager.ResizeBuffers(0.85f, 0.85f);
             Time.fixedDeltaTime = 1f / 60f;
             Time.maximumDeltaTime = 1f / 20f;
 #endif
