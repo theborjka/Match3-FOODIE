@@ -39,16 +39,28 @@ namespace Match3Foodie
         [Header("Timer Tick")]
         [SerializeField, Min(0f)] private float timerTickThreshold = 10f;
 
+        [Header("Startup")]
+        [SerializeField] private bool preloadClipsOnAwake = true;
+        [SerializeField] private bool unlockAudioOnFirstInput = true;
+
         [Header("UI Buttons")]
         [SerializeField] private bool autoBindButtonsOnEnable = true;
         [SerializeField] private bool includeInactiveButtons = true;
 
         private readonly HashSet<Button> boundButtons = new();
+        private AudioClip silentUnlockClip;
         private int lastTickSecond = -1;
+        private bool audioUnlocked;
 
         private void Awake()
         {
             ResolveReferences();
+            ConfigureAudioSource();
+
+            if (preloadClipsOnAwake)
+            {
+                PreloadClips();
+            }
         }
 
         private void OnEnable()
@@ -88,6 +100,16 @@ namespace Match3Foodie
             {
                 RefreshButtonBindings();
             }
+        }
+
+        private void Update()
+        {
+            if (!unlockAudioOnFirstInput || audioUnlocked || !HasUnlockInput())
+            {
+                return;
+            }
+
+            UnlockAudio();
         }
 
         private void OnDisable()
@@ -231,7 +253,83 @@ namespace Match3Foodie
                 return;
             }
 
+            if (!audioUnlocked && !unlockAudioOnFirstInput)
+            {
+                UnlockAudio();
+            }
+
             audioSource.PlayOneShot(clip, volume);
+        }
+
+        private void UnlockAudio()
+        {
+            if (audioUnlocked || audioSource == null)
+            {
+                return;
+            }
+
+            ConfigureAudioSource();
+            AudioListener.pause = false;
+
+            if (silentUnlockClip == null)
+            {
+                silentUnlockClip = AudioClip.Create("Match3AudioUnlock", 1, 1, 44100, false);
+            }
+
+            audioSource.PlayOneShot(silentUnlockClip, 0.001f);
+            audioUnlocked = true;
+        }
+
+        private static bool HasUnlockInput()
+        {
+            if (Input.GetMouseButtonDown(0) || Input.anyKeyDown)
+            {
+                return true;
+            }
+
+            for (var i = 0; i < Input.touchCount; i++)
+            {
+                if (Input.GetTouch(i).phase == TouchPhase.Began)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ConfigureAudioSource()
+        {
+            if (audioSource == null)
+            {
+                return;
+            }
+
+            audioSource.playOnAwake = false;
+            audioSource.loop = false;
+            audioSource.spatialBlend = 0f;
+        }
+
+        private void PreloadClips()
+        {
+            LoadClip(matchClip);
+            LoadClip(fishMatchClip);
+            LoadClip(mathMiniGameStartClip);
+            LoadClip(winClip);
+            LoadClip(loseClip);
+            LoadClip(uiButtonClickClip);
+            LoadClip(timerTickClip);
+            LoadClip(mathCorrectAnswerClip);
+            LoadClip(mathWrongAnswerClip);
+            LoadClip(mathRewardArrivedClip);
+        }
+
+        private static void LoadClip(AudioClip clip)
+        {
+            if (clip != null && clip.loadState == AudioDataLoadState.Unloaded)
+            {
+                clip.LoadAudioData();
+            }
         }
 
         private void ResolveReferences()
@@ -259,6 +357,8 @@ namespace Match3Foodie
                     audioSource = gameObject.AddComponent<AudioSource>();
                 }
             }
+
+            ConfigureAudioSource();
         }
     }
 }
