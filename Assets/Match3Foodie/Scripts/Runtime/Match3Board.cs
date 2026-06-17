@@ -287,7 +287,7 @@ namespace Match3Foodie
 
             while (elapsed < slideDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = slideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / slideDuration);
                 transform.localPosition = Vector3.LerpUnclamped(start, overshoot, EaseOutCubic(t));
                 yield return null;
@@ -298,7 +298,7 @@ namespace Match3Foodie
                 elapsed = 0f;
                 while (elapsed < settleDuration)
                 {
-                    elapsed += Time.deltaTime;
+                    elapsed += AnimationDeltaTime();
                     var t = Mathf.Clamp01(elapsed / settleDuration);
                     transform.localPosition = Vector3.LerpUnclamped(overshoot, target, EaseOutCubic(t));
                     yield return null;
@@ -730,7 +730,7 @@ namespace Match3Foodie
 
             while (visual != null && Vector3.Distance(visual.position, target) > 0.001f)
             {
-                visual.position = Vector3.MoveTowards(visual.position, target, Mathf.Max(0.01f, speed) * Time.deltaTime);
+                visual.position = Vector3.MoveTowards(visual.position, target, Mathf.Max(0.01f, speed) * AnimationDeltaTime());
                 yield return null;
             }
 
@@ -2046,6 +2046,12 @@ namespace Match3Foodie
         private static float EaseOutCubic(float t)
         {
             return 1f - Mathf.Pow(1f - Mathf.Clamp01(t), 3f);
+        }
+
+        private static float AnimationDeltaTime()
+        {
+            var delta = Time.smoothDeltaTime > 0f ? Time.smoothDeltaTime : Time.deltaTime;
+            return Mathf.Clamp(delta, 0f, 1f / 30f);
         }
 
         private Vector3 GetStartMotionOffset()

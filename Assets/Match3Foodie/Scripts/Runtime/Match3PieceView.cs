@@ -158,7 +158,7 @@ namespace Match3Foodie
             var startScale = transform.localScale;
             while (elapsed < destroyPopDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / destroyPopDuration);
                 var scale = destroyScaleCurve.Evaluate(t);
                 transform.localScale = startScale * scale;
@@ -191,7 +191,7 @@ namespace Match3Foodie
 
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / duration);
                 transform.position = Vector3.LerpUnclamped(start, target, curve.Evaluate(t));
                 yield return null;
@@ -214,7 +214,7 @@ namespace Match3Foodie
 
             while (elapsed < safeDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / safeDuration);
                 transform.position = Vector3.LerpUnclamped(start, target, fallCurve.Evaluate(t));
                 yield return null;
@@ -253,7 +253,7 @@ namespace Match3Foodie
             {
                 while (elapsed < exitDuration)
                 {
-                    elapsed += Time.deltaTime;
+                    elapsed += AnimationDeltaTime();
                     var t = Mathf.Clamp01(elapsed / exitDuration);
                     transform.position = Vector3.LerpUnclamped(start, flightStart, moveCurve.Evaluate(t));
                     transform.localScale = Vector3.LerpUnclamped(baseScale, baseScale * 1.08f, Mathf.Sin(t * Mathf.PI));
@@ -274,7 +274,7 @@ namespace Match3Foodie
 
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / duration);
                 var curvedT = moveCurve.Evaluate(t);
                 transform.position = Vector3.LerpUnclamped(flightStart, target, curvedT);
@@ -291,7 +291,7 @@ namespace Match3Foodie
             var popScale = baseScale * arrivePopScale;
             while (elapsed < popDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / popDuration);
                 transform.localScale = t < 0.5f
                     ? Vector3.LerpUnclamped(baseScale, popScale, t * 2f)
@@ -322,7 +322,7 @@ namespace Match3Foodie
 
             while (elapsed < safeDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / safeDuration);
                 transform.position = Vector3.LerpUnclamped(start, target, fallCurve.Evaluate(t));
 
@@ -353,7 +353,7 @@ namespace Match3Foodie
 
             while (elapsed < safeDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / safeDuration);
                 transform.position = target + offset * Mathf.Sin(t * Mathf.PI);
                 yield return null;
@@ -388,7 +388,7 @@ namespace Match3Foodie
 
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / duration);
                 var wave = Mathf.Sin(t * Mathf.PI * 2f * waveFrequency) * waveAmplitude * Mathf.Sin(t * Mathf.PI);
                 transform.position = Vector3.LerpUnclamped(start, target, t) + perpendicular * wave;
@@ -452,6 +452,12 @@ namespace Match3Foodie
             {
                 spriteRenderer.sortingOrder = baseSortingOrder;
             }
+        }
+
+        private static float AnimationDeltaTime()
+        {
+            var delta = Time.smoothDeltaTime > 0f ? Time.smoothDeltaTime : Time.deltaTime;
+            return Mathf.Clamp(delta, 0f, 1f / 30f);
         }
 
         private void Reset()

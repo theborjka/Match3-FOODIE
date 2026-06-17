@@ -79,7 +79,7 @@ namespace Match3Foodie
             var elapsed = 0f;
             while (elapsed < bumpDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += AnimationDeltaTime();
                 var t = Mathf.Clamp01(elapsed / bumpDuration);
                 var scale = t < 0.5f
                     ? Mathf.LerpUnclamped(1f, bumpScale, t * 2f)
@@ -90,6 +90,12 @@ namespace Match3Foodie
 
             transform.localScale = baseScale;
             bumpRoutine = null;
+        }
+
+        private static float AnimationDeltaTime()
+        {
+            var delta = Time.smoothDeltaTime > 0f ? Time.smoothDeltaTime : Time.deltaTime;
+            return Mathf.Clamp(delta, 0f, 1f / 30f);
         }
     }
 }
