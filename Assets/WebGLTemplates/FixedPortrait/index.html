@@ -124,6 +124,8 @@
 
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      /* Cap WebGL render resolution for smoother mobile FPS while CSS keeps the visible 9:16 area. */
+      var maxDevicePixelRatio = 1.5;
       var config = {
         dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
         frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
@@ -138,7 +140,9 @@
         companyName: "{{{ COMPANY_NAME }}}",
         productName: "{{{ PRODUCT_NAME }}}",
         productVersion: "{{{ PRODUCT_VERSION }}}",
-        showBanner: unityShowBanner
+        showBanner: unityShowBanner,
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, maxDevicePixelRatio),
+        matchWebGLToCanvasSize: true
       };
 
       loadingBar.style.display = "block";

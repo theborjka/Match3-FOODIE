@@ -124,6 +124,8 @@
 
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/Build.loader.js";
+      /* Cap WebGL render resolution for smoother mobile FPS while CSS keeps the visible 9:16 area. */
+      var maxDevicePixelRatio = 1.5;
       var config = {
         dataUrl: buildUrl + "/Build.data",
         frameworkUrl: buildUrl + "/Build.framework.js",
@@ -132,7 +134,9 @@
         companyName: "DefaultCompany",
         productName: "Match3 FOODIE",
         productVersion: "1.0",
-        showBanner: unityShowBanner
+        showBanner: unityShowBanner,
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, maxDevicePixelRatio),
+        matchWebGLToCanvasSize: true
       };
 
       loadingBar.style.display = "block";
