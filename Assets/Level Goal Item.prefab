@@ -126,10 +126,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Match3Foodie.Match3GoalItemView
   iconImage: {fileID: 2204172286954586050}
   amountText: {fileID: 7145526534765562844}
+  collectionTarget: {fileID: 0}
   completedMarker: {fileID: 2014796836251634029}
   activeColor: {r: 1, g: 1, b: 1, a: 1}
   activeColorText: {r: 0.44313726, g: 0.14117648, b: 0, a: 1}
   completedColor: {r: 1, g: 1, b: 1, a: 0.45}
+  bumpScale: 1.14
+  bumpDuration: 0.16
 --- !u!1 &6109642566025559905
 GameObject:
   m_ObjectHideFlags: 0

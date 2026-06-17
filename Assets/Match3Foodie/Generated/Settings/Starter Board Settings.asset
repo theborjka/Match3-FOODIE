@@ -16,7 +16,7 @@ MonoBehaviour:
   height: 6
   cellSize: 0.7
   gapSize: {x: 0.165, y: 0.16}
-  elementSize: 1.04
+  elementSize: 0.29
   swapDuration: 0.16
   shuffleDuration: 0.28
   fallDurationPerCell: 0.15

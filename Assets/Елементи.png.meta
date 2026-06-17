@@ -117,6 +117,19 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
@@ -126,8 +139,8 @@ TextureImporter:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -146,10 +159,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_1"
       rect:
         serializedVersion: 2
-        x: 108
+        x: 432
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -168,10 +181,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_2"
       rect:
         serializedVersion: 2
-        x: 216
+        x: 864
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -190,10 +203,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_3"
       rect:
         serializedVersion: 2
-        x: 324
+        x: 1296
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -212,10 +225,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_4"
       rect:
         serializedVersion: 2
-        x: 432
+        x: 1728
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -234,10 +247,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_5"
       rect:
         serializedVersion: 2
-        x: 540
+        x: 2160
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -256,10 +269,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_6"
       rect:
         serializedVersion: 2
-        x: 648
+        x: 2592
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -278,10 +291,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_7"
       rect:
         serializedVersion: 2
-        x: 756
+        x: 3024
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -300,10 +313,10 @@ TextureImporter:
       name: "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_8"
       rect:
         serializedVersion: 2
-        x: 864
+        x: 3456
         y: 0
-        width: 108
-        height: 108
+        width: 432
+        height: 432
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -332,7 +345,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries:
       - key: SpriteEditor.SliceSettings
-        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":108.0,"y":108.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":9.0,"y":1.0},"gridSpriteSize":{"x":432.0,"y":432.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":2,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
       "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_0": 7994375631284191448
       "\u0415\u043B\u0435\u043C\u0435\u043D\u0442\u0438_1": 8492971116590335847
