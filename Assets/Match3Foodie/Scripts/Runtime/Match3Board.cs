@@ -29,6 +29,7 @@ namespace Match3Foodie
         [SerializeField] private Match3BoardSettings settings;
         [SerializeField] private Transform piecesRoot;
         [SerializeField] private Match3CollectionTargetProvider collectionTargetProvider;
+        [SerializeField] private bool buildOnStart = true;
 
         [Header("Start Motion")]
         [SerializeField] private bool playStartMotion = true;
@@ -73,6 +74,19 @@ namespace Match3Foodie
         public UnityEvent BoardSettled => boardSettled;
         public int Width => settings != null ? settings.Width : 0;
         public int Height => settings != null ? settings.Height : 0;
+
+        public void SetBuildOnStart(bool enabled)
+        {
+            buildOnStart = enabled;
+        }
+
+        public void SetBoardVisible(bool visible)
+        {
+            foreach (var boardRenderer in GetComponentsInChildren<Renderer>(true))
+            {
+                boardRenderer.enabled = visible;
+            }
+        }
 
         public void SetInputEnabled(bool enabled)
         {
@@ -197,7 +211,10 @@ namespace Match3Foodie
 
         private void Start()
         {
-            BuildBoard();
+            if (buildOnStart)
+            {
+                BuildBoard();
+            }
         }
 
         private void Update()

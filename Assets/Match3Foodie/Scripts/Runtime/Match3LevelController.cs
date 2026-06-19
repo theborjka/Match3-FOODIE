@@ -21,6 +21,7 @@ namespace Match3Foodie
         [SerializeField] private Match3Board board;
         [SerializeField] private Match3MathChallengePopup mathChallengePopup;
         [SerializeField] private Match3BoosterController boosterController;
+        [SerializeField] private Match3SplashScreen splashScreen;
         [SerializeField] private bool startTimerOnEnable = true;
         [SerializeField] private bool disableBoardWhenLevelEnds = true;
 
@@ -55,6 +56,7 @@ namespace Match3Foodie
         private bool mathChallengeRunning;
         private bool levelCompletePending;
         private Coroutine mathChallengeRoutine;
+        private Coroutine restartRoutine;
 
         public Match3LevelSettings LevelSettings => levelSettings;
         public float RemainingTime => remainingTime;
@@ -89,6 +91,11 @@ namespace Match3Foodie
                 boosterController = FindAnyObjectByType<Match3BoosterController>();
             }
 
+            if (splashScreen == null)
+            {
+                splashScreen = FindAnyObjectByType<Match3SplashScreen>();
+            }
+
             ResetLevelState();
         }
 
@@ -101,7 +108,7 @@ namespace Match3Foodie
                 board.BoardSettled.AddListener(HandleBoardSettled);
             }
 
-            if (startTimerOnEnable)
+            if (startTimerOnEnable && !HasSplashScreen())
             {
                 StartTimer();
             }
@@ -229,6 +236,12 @@ namespace Match3Foodie
 
         public void RestartLevel()
         {
+            if (restartRoutine != null)
+            {
+                StopCoroutine(restartRoutine);
+                restartRoutine = null;
+            }
+
             if (mathChallengeRoutine != null)
             {
                 StopCoroutine(mathChallengeRoutine);
@@ -238,6 +251,19 @@ namespace Match3Foodie
             boosterController?.SetControlsLocked(false);
             boosterController?.ResetUsesToInitial();
             ResetLevelState();
+
+            if (HasSplashScreen())
+            {
+                restartRoutine = StartCoroutine(RestartLevelWithSplashRoutine());
+                return;
+            }
+
+            board?.RebuildBoard(true);
+            StartTimer();
+        }
+
+        public void StartLevelAfterSplash()
+        {
             board?.RebuildBoard(true);
             StartTimer();
         }
@@ -553,6 +579,25 @@ namespace Match3Foodie
             boosterController?.SetControlsLocked(true);
 
             levelFailed.Invoke();
+        }
+
+        private IEnumerator RestartLevelWithSplashRoutine()
+        {
+            var completed = false;
+            splashScreen.Play(() => completed = true);
+
+            while (!completed)
+            {
+                yield return null;
+            }
+
+            StartLevelAfterSplash();
+            restartRoutine = null;
+        }
+
+        private bool HasSplashScreen()
+        {
+            return splashScreen != null && splashScreen.isActiveAndEnabled;
         }
     }
 }

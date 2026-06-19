@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Match3Foodie
 {
@@ -69,6 +72,7 @@ namespace Match3Foodie
 
             if (board != null)
             {
+                board.PieceSelected.AddListener(HandleBoardUserInput);
                 board.PiecesMatched.AddListener(HandlePiecesMatched);
                 board.PieceCleared.AddListener(HandlePieceCleared);
             }
@@ -109,13 +113,14 @@ namespace Match3Foodie
                 return;
             }
 
-            UnlockAudio();
+            UnlockAudio(true);
         }
 
         private void OnDisable()
         {
             if (board != null)
             {
+                board.PieceSelected.RemoveListener(HandleBoardUserInput);
                 board.PiecesMatched.RemoveListener(HandlePiecesMatched);
                 board.PieceCleared.RemoveListener(HandlePieceCleared);
             }
@@ -181,6 +186,14 @@ namespace Match3Foodie
             Play(matchClip, matchVolume);
         }
 
+        private void HandleBoardUserInput(Match3PieceView piece)
+        {
+            if (piece != null)
+            {
+                UnlockAudio(true);
+            }
+        }
+
         private void HandlePieceCleared(Match3PieceView piece)
         {
             if (piece == null
@@ -228,6 +241,7 @@ namespace Match3Foodie
 
         private void PlayUiButtonClick()
         {
+            UnlockAudio(true);
             Play(uiButtonClickClip, uiButtonClickVolume);
         }
 
@@ -253,15 +267,15 @@ namespace Match3Foodie
                 return;
             }
 
-            if (!audioUnlocked && !unlockAudioOnFirstInput)
+            if (!audioUnlocked)
             {
-                UnlockAudio();
+                UnlockAudio(false);
             }
 
             audioSource.PlayOneShot(clip, volume);
         }
 
-        private void UnlockAudio()
+        private void UnlockAudio(bool fromUserGesture)
         {
             if (audioUnlocked || audioSource == null)
             {
@@ -273,15 +287,48 @@ namespace Match3Foodie
 
             if (silentUnlockClip == null)
             {
-                silentUnlockClip = AudioClip.Create("Match3AudioUnlock", 1, 1, 44100, false);
+                silentUnlockClip = AudioClip.Create("Match3AudioUnlock", 4410, 1, 44100, false);
             }
 
             audioSource.PlayOneShot(silentUnlockClip, 0.001f);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            audioUnlocked = fromUserGesture;
+#else
             audioUnlocked = true;
+#endif
         }
 
         private static bool HasUnlockInput()
         {
+#if ENABLE_INPUT_SYSTEM
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                return true;
+            }
+
+            if (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame)
+            {
+                return true;
+            }
+
+            if (Touchscreen.current != null)
+            {
+                if (Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
+                {
+                    return true;
+                }
+
+                foreach (var touch in Touchscreen.current.touches)
+                {
+                    if (touch.press.wasPressedThisFrame)
+                    {
+                        return true;
+                    }
+                }
+            }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
             if (Input.GetMouseButtonDown(0) || Input.anyKeyDown)
             {
                 return true;
@@ -296,6 +343,9 @@ namespace Match3Foodie
             }
 
             return false;
+#else
+            return false;
+#endif
         }
 
         private void ConfigureAudioSource()
