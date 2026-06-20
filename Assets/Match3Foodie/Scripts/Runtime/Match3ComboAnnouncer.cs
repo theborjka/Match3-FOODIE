@@ -495,7 +495,7 @@ namespace Match3Foodie
 
             var parent = uiVfxParent != null ? uiVfxParent : popupParent;
             var instance = Instantiate(prefab, parent);
-            instance.SetActive(true);
+            instance.SetActive(false);
 
             if (instance.transform is RectTransform vfxRect)
             {
@@ -512,20 +512,43 @@ namespace Match3Foodie
                     RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, screenPosition, camera, out var localPosition);
                     vfxRect.anchoredPosition = localPosition;
                 }
+
+                vfxRect.localScale = prefab.transform.localScale;
+                vfxRect.localEulerAngles = prefab.transform.localEulerAngles;
             }
 
+            instance.SetActive(true);
+            ClearVisualState(instance);
             PlayParticles(instance);
             DestroyAfterLifetime(instance);
         }
 
         private void PlayWorldVfx(GameObject prefab, Vector3 worldPosition)
         {
-            var instance = worldVfxParent != null ? Instantiate(prefab, worldVfxParent) : Instantiate(prefab);
-            instance.transform.position = worldPosition + worldVfxOffset;
+            var position = worldPosition + worldVfxOffset;
+            var rotation = prefab.transform.rotation;
+            var instance = worldVfxParent != null
+                ? Instantiate(prefab, position, rotation, worldVfxParent)
+                : Instantiate(prefab, position, rotation);
+            instance.transform.localScale = prefab.transform.localScale;
             instance.SetActive(true);
 
+            ClearVisualState(instance);
             PlayParticles(instance);
             DestroyAfterLifetime(instance);
+        }
+
+        private void ClearVisualState(GameObject instance)
+        {
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particleSystem.Clear(true);
+            }
+
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.Clear();
+            }
         }
 
         private void PlayParticles(GameObject instance)

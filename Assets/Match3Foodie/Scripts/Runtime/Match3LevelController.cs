@@ -25,6 +25,9 @@ namespace Match3Foodie
         [SerializeField] private bool startTimerOnEnable = true;
         [SerializeField] private bool disableBoardWhenLevelEnds = true;
 
+        [Header("Finish Clear")]
+        [SerializeField] private bool playFinishClearBeforeWin = true;
+
         [Header("Debug")]
         [SerializeField] private bool enableDebugMathBonusKey = true;
 #if ENABLE_INPUT_SYSTEM
@@ -57,6 +60,7 @@ namespace Match3Foodie
         private bool levelCompletePending;
         private Coroutine mathChallengeRoutine;
         private Coroutine restartRoutine;
+        private Coroutine levelCompleteRoutine;
 
         public Match3LevelSettings LevelSettings => levelSettings;
         public float RemainingTime => remainingTime;
@@ -169,6 +173,12 @@ namespace Match3Foodie
                 mathChallengeRoutine = null;
             }
 
+            if (levelCompleteRoutine != null)
+            {
+                StopCoroutine(levelCompleteRoutine);
+                levelCompleteRoutine = null;
+            }
+
             if (board != null)
             {
                 board.SetInputEnabled(true);
@@ -246,6 +256,12 @@ namespace Match3Foodie
             {
                 StopCoroutine(mathChallengeRoutine);
                 mathChallengeRoutine = null;
+            }
+
+            if (levelCompleteRoutine != null)
+            {
+                StopCoroutine(levelCompleteRoutine);
+                levelCompleteRoutine = null;
             }
 
             boosterController?.SetControlsLocked(false);
@@ -547,7 +563,7 @@ namespace Match3Foodie
 
         private void CompleteLevel()
         {
-            if (levelEnded)
+            if (levelEnded || levelCompleteRoutine != null)
             {
                 return;
             }
@@ -562,6 +578,17 @@ namespace Match3Foodie
             }
 
             boosterController?.SetControlsLocked(true);
+            levelCompleteRoutine = StartCoroutine(CompleteLevelRoutine());
+        }
+
+        private IEnumerator CompleteLevelRoutine()
+        {
+            if (playFinishClearBeforeWin && board != null)
+            {
+                yield return board.PlayFinishClearRoutine();
+            }
+
+            levelCompleteRoutine = null;
             levelCompleted.Invoke();
         }
 

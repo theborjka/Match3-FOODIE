@@ -7,6 +7,15 @@ namespace Match3Foodie
         None = 0,
         Fish = 1,
         MathBonus = 2,
+        Bomb = 3,
+        Line = 4,
+        CrossLine = 5,
+    }
+
+    public enum Match3LineClearDirection
+    {
+        Horizontal = 0,
+        Vertical = 1,
     }
 
     [CreateAssetMenu(menuName = "Match3 Foodie/Element Definition", fileName = "Element Definition")]
@@ -22,6 +31,8 @@ namespace Match3Foodie
         [Header("Special Effect")]
         [SerializeField] private Match3SpecialEffectType specialEffectType;
         [SerializeField, Min(0f)] private float mathBonusSeconds = 10f;
+        [SerializeField, Min(0)] private int bombRadius = 1;
+        [SerializeField] private Match3LineClearDirection lineClearDirection = Match3LineClearDirection.Horizontal;
 
         public string ElementId => elementId;
         public Sprite Sprite => sprite;
@@ -31,5 +42,7 @@ namespace Match3Foodie
         public GameObject DestructionEffectPrefab => destructionEffectPrefab;
         public Match3SpecialEffectType SpecialEffectType => specialEffectType;
         public float MathBonusSeconds => mathBonusSeconds;
+        public int BombRadius => Mathf.Max(0, bombRadius);
+        public Match3LineClearDirection LineClearDirection => lineClearDirection;
     }
 }

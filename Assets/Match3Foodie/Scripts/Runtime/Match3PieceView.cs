@@ -24,6 +24,7 @@ namespace Match3Foodie
         public Match3ElementDefinition Definition { get; private set; }
         public Match3GridPosition GridPosition { get; private set; }
         public bool IsSelected { get; private set; }
+        public float DestroyPopDuration => destroyPopDuration;
         public Vector2 VisualWorldSize
         {
             get
@@ -152,17 +153,33 @@ namespace Match3Foodie
 
         public IEnumerator PlayDestroyRoutine()
         {
+            if (this == null)
+            {
+                yield break;
+            }
+
             PlayDestroyEffect();
 
             var elapsed = 0f;
+            var safeDuration = Mathf.Max(0.01f, destroyPopDuration);
             var startScale = transform.localScale;
-            while (elapsed < destroyPopDuration)
+            while (elapsed < safeDuration)
             {
+                if (this == null)
+                {
+                    yield break;
+                }
+
                 elapsed += AnimationDeltaTime();
-                var t = Mathf.Clamp01(elapsed / destroyPopDuration);
+                var t = Mathf.Clamp01(elapsed / safeDuration);
                 var scale = destroyScaleCurve.Evaluate(t);
                 transform.localScale = startScale * scale;
                 yield return null;
+            }
+
+            if (this != null)
+            {
+                Destroy(gameObject);
             }
         }
 

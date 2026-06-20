@@ -1343,6 +1343,10 @@ MonoBehaviour:
   startMotionDuration: 0.65
   startMotionElasticDistance: 0.22
   startMotionSlidePortion: 0.82
+  finishClearInitialDelay: 0.25
+  finishClearPieceDelay: 0.035
+  finishClearFinalDelay: 0.45
+  finishClearRandomness: 0.35
   inputEnabled: 1
   inputCamera: {fileID: 519420031}
   pieceLayerMask:
@@ -1357,6 +1361,9 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   pieceCleared:
+    m_PersistentCalls:
+      m_Calls: []
+  finishPiecePopped:
     m_PersistentCalls:
       m_Calls: []
   piecesMatched:
@@ -1401,6 +1408,7 @@ MonoBehaviour:
   splashScreen: {fileID: 0}
   startTimerOnEnable: 1
   disableBoardWhenLevelEnds: 1
+  playFinishClearBeforeWin: 1
   enableDebugMathBonusKey: 1
   debugMathBonusKey: 27
   enableDebugFailKey: 1
@@ -7023,7 +7031,7 @@ MonoBehaviour:
     titleColor: {r: 1, g: 0.86, b: 0.18, a: 1}
     countFormat: +{0} IN ONE!
     countColor: {r: 1, g: 1, b: 1, a: 1}
-    vfxPrefab: {fileID: 1311004446526425771, guid: 77f80176134f24687994b6bbb2ed9797, type: 3}
+    vfxPrefab: {fileID: 4279959023112666885, guid: 738c1c167568543dbb27d4d42434309c, type: 3}
     popScale: 1.42
     holdDuration: 0.58
     shakeStrength: 10
@@ -7066,7 +7074,7 @@ MonoBehaviour:
   worldVfxParent: {fileID: 0}
   worldVfxOffset: {x: 0, y: 0, z: 0}
   vfxLifetime: 5
-  shakeRoot: {fileID: 0}
+  shakeRoot: {fileID: 1632049957}
   shakeDuration: 0.16
   announced:
     m_PersistentCalls:

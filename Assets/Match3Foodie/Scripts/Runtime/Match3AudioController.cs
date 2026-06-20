@@ -75,6 +75,7 @@ namespace Match3Foodie
                 board.PieceSelected.AddListener(HandleBoardUserInput);
                 board.PiecesMatched.AddListener(HandlePiecesMatched);
                 board.PieceCleared.AddListener(HandlePieceCleared);
+                board.FinishPiecePopped.AddListener(HandleFinishPiecePopped);
             }
 
             if (levelController != null)
@@ -123,6 +124,7 @@ namespace Match3Foodie
                 board.PieceSelected.RemoveListener(HandleBoardUserInput);
                 board.PiecesMatched.RemoveListener(HandlePiecesMatched);
                 board.PieceCleared.RemoveListener(HandlePieceCleared);
+                board.FinishPiecePopped.RemoveListener(HandleFinishPiecePopped);
             }
 
             if (levelController != null)
@@ -204,6 +206,20 @@ namespace Match3Foodie
             }
 
             Play(fishMatchClip, fishMatchVolume);
+        }
+
+        private void HandleFinishPiecePopped(Match3PieceView piece)
+        {
+            if (piece != null
+                && piece.Definition != null
+                && piece.Definition.SpecialEffectType == Match3SpecialEffectType.Fish
+                && fishMatchClip != null)
+            {
+                Play(fishMatchClip, fishMatchVolume);
+                return;
+            }
+
+            Play(matchClip, matchVolume);
         }
 
         private void HandleTimerChanged(float remainingSeconds)

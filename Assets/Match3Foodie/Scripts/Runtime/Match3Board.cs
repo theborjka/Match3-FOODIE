@@ -40,6 +40,12 @@ namespace Match3Foodie
         [SerializeField, Min(0f)] private float startMotionElasticDistance = 0.22f;
         [SerializeField, Range(0.05f, 0.95f)] private float startMotionSlidePortion = 0.82f;
 
+        [Header("Finish Clear")]
+        [SerializeField, Min(0f)] private float finishClearInitialDelay = 0.25f;
+        [SerializeField, Min(0f)] private float finishClearPieceDelay = 0.035f;
+        [SerializeField, Min(0f)] private float finishClearFinalDelay = 0.45f;
+        [SerializeField, Min(0f)] private float finishClearRandomness = 0.35f;
+
         [Header("Input")]
         [SerializeField] private bool inputEnabled = true;
         [SerializeField] private Camera inputCamera;
@@ -51,6 +57,7 @@ namespace Match3Foodie
         [SerializeField] private PieceEvent pieceSelected = new();
         [SerializeField] private PieceEvent pieceCollected = new();
         [SerializeField] private PieceEvent pieceCleared = new();
+        [SerializeField] private PieceEvent finishPiecePopped = new();
         [SerializeField] private PiecesEvent piecesMatched = new();
         [SerializeField] private UnityEvent boardSettled = new();
 
@@ -65,11 +72,24 @@ namespace Match3Foodie
         private bool hasPlayedStartMotion;
         private int totalSpawnWeight;
 
+        private readonly struct FinishClearEntry
+        {
+            public FinishClearEntry(Match3PieceView piece, float order)
+            {
+                Piece = piece;
+                Order = order;
+            }
+
+            public Match3PieceView Piece { get; }
+            public float Order { get; }
+        }
+
         public Match3BoardSettings Settings => settings;
         public bool IsResolving => isResolving;
         public PieceEvent PieceSelected => pieceSelected;
         public PieceEvent PieceCollected => pieceCollected;
         public PieceEvent PieceCleared => pieceCleared;
+        public PieceEvent FinishPiecePopped => finishPiecePopped;
         public PiecesEvent PiecesMatched => piecesMatched;
         public UnityEvent BoardSettled => boardSettled;
         public int Width => settings != null ? settings.Width : 0;
@@ -191,6 +211,72 @@ namespace Match3Foodie
             }
 
             return result;
+        }
+
+        public IEnumerator PlayFinishClearRoutine()
+        {
+            if (pieces == null || settings == null)
+            {
+                yield break;
+            }
+
+            inputEnabled = false;
+            pointerDownPiece = null;
+            SetSelectedPiece(null);
+
+            var remainingPieces = new List<FinishClearEntry>(settings.Width * settings.Height);
+            var center = new Vector2((settings.Width - 1) * 0.5f, (settings.Height - 1) * 0.5f);
+            for (var y = 0; y < settings.Height; y++)
+            {
+                for (var x = 0; x < settings.Width; x++)
+                {
+                    var piece = pieces[x, y];
+                    if (piece == null)
+                    {
+                        continue;
+                    }
+
+                    var gridPoint = new Vector2(x, y);
+                    var distanceFromCenter = Vector2.Distance(gridPoint, center);
+                    var order = distanceFromCenter + Random.Range(0f, finishClearRandomness);
+                    remainingPieces.Add(new FinishClearEntry(piece, order));
+                }
+            }
+
+            if (remainingPieces.Count == 0)
+            {
+                yield break;
+            }
+
+            remainingPieces.Sort((a, b) => a.Order.CompareTo(b.Order));
+
+            if (finishClearInitialDelay > 0f)
+            {
+                yield return new WaitForSeconds(finishClearInitialDelay);
+            }
+
+            foreach (var entry in remainingPieces)
+            {
+                var piece = entry.Piece;
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                ClearPieceFromGrid(piece);
+                StartClearVisual(piece, false, false);
+                finishPiecePopped.Invoke(piece);
+
+                if (finishClearPieceDelay > 0f)
+                {
+                    yield return new WaitForSeconds(finishClearPieceDelay);
+                }
+            }
+
+            if (finishClearFinalDelay > 0f)
+            {
+                yield return new WaitForSeconds(finishClearFinalDelay);
+            }
         }
 
         private void Awake()
@@ -773,6 +859,13 @@ namespace Match3Foodie
                 return;
             }
 
+            if (piece.Definition != null && TryAddInstantSpecialTargets(piece, clearSet))
+            {
+                ClearPieceFromGrid(piece);
+                StartClearVisual(piece);
+                return;
+            }
+
             StartCoroutine(ClearPiecesRoutine(new List<Match3PieceView> { piece }));
         }
 
@@ -795,8 +888,10 @@ namespace Match3Foodie
 
         private IEnumerator ResolveSpecialEffectsRoutine(HashSet<Match3PieceView> matches)
         {
-            var matchedPieces = new List<Match3PieceView>(matches);
+            var processedInstantSpecials = new HashSet<Match3PieceView>();
+            ExpandInstantSpecialTargets(matches, processedInstantSpecials);
 
+            var matchedPieces = new List<Match3PieceView>(matches);
             ShuffleList(matchedPieces);
             var fishRoutines = new List<Coroutine>();
             foreach (var piece in matchedPieces)
@@ -815,6 +910,31 @@ namespace Match3Foodie
             foreach (var routine in fishRoutines)
             {
                 yield return routine;
+            }
+
+            ExpandInstantSpecialTargets(matches, processedInstantSpecials);
+        }
+
+        private void ExpandInstantSpecialTargets(HashSet<Match3PieceView> matches, HashSet<Match3PieceView> processedInstantSpecials)
+        {
+            var expanded = true;
+            while (expanded)
+            {
+                expanded = false;
+                var instantPieces = new List<Match3PieceView>(matches);
+                foreach (var piece in instantPieces)
+                {
+                    if (piece == null || processedInstantSpecials.Contains(piece))
+                    {
+                        continue;
+                    }
+
+                    processedInstantSpecials.Add(piece);
+                    if (TryAddInstantSpecialTargets(piece, matches))
+                    {
+                        expanded = true;
+                    }
+                }
             }
         }
 
@@ -860,8 +980,81 @@ namespace Match3Foodie
                 yield break;
             }
 
+            TryAddInstantSpecialTargets(target, matches);
             specialClearedPieces.Add(target);
             StartClearVisual(target);
+        }
+
+        private bool TryAddInstantSpecialTargets(Match3PieceView specialPiece, HashSet<Match3PieceView> targets)
+        {
+            if (specialPiece == null || specialPiece.Definition == null || targets == null)
+            {
+                return false;
+            }
+
+            switch (specialPiece.Definition.SpecialEffectType)
+            {
+                case Match3SpecialEffectType.Bomb:
+                    AddBombTargets(specialPiece.GridPosition, specialPiece.Definition.BombRadius, targets);
+                    return true;
+                case Match3SpecialEffectType.Line:
+                    AddLineTargets(specialPiece.GridPosition, specialPiece.Definition.LineClearDirection, targets);
+                    return true;
+                case Match3SpecialEffectType.CrossLine:
+                    AddLineTargets(specialPiece.GridPosition, Match3LineClearDirection.Horizontal, targets);
+                    AddLineTargets(specialPiece.GridPosition, Match3LineClearDirection.Vertical, targets);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private void AddBombTargets(Match3GridPosition center, int radius, HashSet<Match3PieceView> targets)
+        {
+            var safeRadius = Mathf.Max(0, radius);
+            for (var y = center.Y - safeRadius; y <= center.Y + safeRadius; y++)
+            {
+                for (var x = center.X - safeRadius; x <= center.X + safeRadius; x++)
+                {
+                    var position = new Match3GridPosition(x, y);
+                    if (!IsInside(position))
+                    {
+                        continue;
+                    }
+
+                    var piece = pieces[x, y];
+                    if (piece != null)
+                    {
+                        targets.Add(piece);
+                    }
+                }
+            }
+        }
+
+        private void AddLineTargets(Match3GridPosition origin, Match3LineClearDirection direction, HashSet<Match3PieceView> targets)
+        {
+            if (direction == Match3LineClearDirection.Horizontal)
+            {
+                for (var x = 0; x < settings.Width; x++)
+                {
+                    var piece = pieces[x, origin.Y];
+                    if (piece != null)
+                    {
+                        targets.Add(piece);
+                    }
+                }
+
+                return;
+            }
+
+            for (var y = 0; y < settings.Height; y++)
+            {
+                var piece = pieces[origin.X, y];
+                if (piece != null)
+                {
+                    targets.Add(piece);
+                }
+            }
         }
 
         private IEnumerator ResolveFishEffectNonBlockingRoutine(Match3PieceView fishPiece, HashSet<Match3PieceView> matches)
@@ -928,6 +1121,7 @@ namespace Match3Foodie
                 yield break;
             }
 
+            TryAddInstantSpecialTargets(target, matches);
             StartClearVisual(target);
         }
 
@@ -1068,26 +1262,28 @@ namespace Match3Foodie
             yield break;
         }
 
-        private float StartClearVisual(Match3PieceView piece)
+        private float StartClearVisual(Match3PieceView piece, bool allowCollectionFlyer = true, bool invokeClearEvent = true)
         {
             if (piece == null)
             {
                 return 0f;
             }
 
-            pieceCleared.Invoke(piece);
+            if (invokeClearEvent)
+            {
+                pieceCleared.Invoke(piece);
+            }
 
             float duration;
-            if (TryStartCollectionFlyer(piece, out var collectDuration))
+            if (allowCollectionFlyer && TryStartCollectionFlyer(piece, out var collectDuration))
             {
                 piece.PlayDestroyEffect();
                 ScheduleDestroyPiece(piece, collectDuration);
                 return collectDuration;
             }
 
+            duration = piece.DestroyPopDuration;
             StartCoroutine(piece.PlayDestroyRoutine());
-            duration = 0.18f;
-            ScheduleDestroyPiece(piece, duration);
             return duration;
         }
 
