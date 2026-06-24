@@ -12,6 +12,7 @@ namespace Match3Foodie
         [SerializeField] private AnimationCurve moveCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
         [SerializeField] private AnimationCurve fallCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
         [SerializeField] private AnimationCurve destroyScaleCurve = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
+        [SerializeField, Min(0f)] private float destructionEffectLifetimePadding = 0.35f;
 
         private Match3Board board;
         private Coroutine motionRoutine;
@@ -20,11 +21,18 @@ namespace Match3Foodie
         private bool baseFlipX;
         private Vector3 baseLocalScale;
         private int baseSortingOrder;
+        private Match3SpecialEffectType specialEffectType;
+        private Match3LineClearDirection lineClearDirection;
+        private int bombRadius;
+        private bool destroyEffectPlayed;
 
         public Match3ElementDefinition Definition { get; private set; }
         public Match3GridPosition GridPosition { get; private set; }
         public bool IsSelected { get; private set; }
         public float DestroyPopDuration => destroyPopDuration;
+        public Match3SpecialEffectType SpecialEffectType => specialEffectType;
+        public Match3LineClearDirection LineClearDirection => lineClearDirection;
+        public int BombRadius => Mathf.Max(0, bombRadius);
         public Vector2 VisualWorldSize
         {
             get
@@ -45,6 +53,10 @@ namespace Match3Foodie
             board = owner;
             Definition = definition;
             GridPosition = gridPosition;
+            specialEffectType = definition.SpecialEffectType;
+            lineClearDirection = definition.LineClearDirection;
+            bombRadius = definition.BombRadius;
+            destroyEffectPlayed = false;
             baseScale = transform.localScale;
             baseLocalScale = transform.localScale;
             baseRotation = transform.rotation;
@@ -58,13 +70,38 @@ namespace Match3Foodie
             {
                 baseFlipX = spriteRenderer.flipX;
                 baseSortingOrder = spriteRenderer.sortingOrder;
-                spriteRenderer.sprite = definition.Sprite;
+                spriteRenderer.sprite = definition.GetSpriteForSpecial(specialEffectType, lineClearDirection);
                 spriteRenderer.color = definition.Tint;
             }
 
             transform.rotation = baseRotation;
 
             gameObject.name = $"Piece {definition.ElementId} {gridPosition}";
+        }
+
+        public void SetCreatedSpecial(Match3SpecialEffectType effectType, Match3LineClearDirection direction)
+        {
+            if (Definition == null)
+            {
+                return;
+            }
+
+            specialEffectType = effectType;
+            lineClearDirection = direction;
+            bombRadius = Definition.BombRadius;
+
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            }
+
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.sprite = Definition.GetSpriteForSpecial(specialEffectType, lineClearDirection);
+                spriteRenderer.color = Definition.Tint;
+            }
+
+            gameObject.name = $"Piece {Definition.ElementId} {specialEffectType} {GridPosition}";
         }
 
         public void SetGridPosition(Match3GridPosition gridPosition)
@@ -185,12 +222,85 @@ namespace Match3Foodie
 
         public void PlayDestroyEffect()
         {
-            if (Definition == null || Definition.DestructionEffectPrefab == null)
+            if (destroyEffectPlayed || Definition == null || Definition.DestructionEffectPrefab == null)
             {
                 return;
             }
 
-            Instantiate(Definition.DestructionEffectPrefab, transform.position, Quaternion.identity, board.transform);
+            destroyEffectPlayed = true;
+
+            var parent = board != null ? board.transform : null;
+            var instance = Instantiate(Definition.DestructionEffectPrefab, transform.position, Quaternion.identity, parent);
+            instance.SetActive(false);
+            ClearVisualState(instance);
+            instance.SetActive(true);
+            PlayVisualState(instance);
+            Destroy(instance, GetVisualEffectLifetime(instance) + destructionEffectLifetimePadding);
+        }
+
+        private static void ClearVisualState(GameObject instance)
+        {
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particleSystem.Clear(true);
+            }
+
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.emitting = false;
+                trailRenderer.Clear();
+            }
+        }
+
+        private static void PlayVisualState(GameObject instance)
+        {
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.Clear();
+                trailRenderer.emitting = true;
+            }
+
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particleSystem.Clear(true);
+                particleSystem.Play(true);
+            }
+        }
+
+        private static float GetVisualEffectLifetime(GameObject instance)
+        {
+            var lifetime = 0f;
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                var main = particleSystem.main;
+                var startDelay = GetCurveMaxValue(main.startDelay);
+                var startLifetime = GetCurveMaxValue(main.startLifetime);
+                lifetime = Mathf.Max(lifetime, startDelay + main.duration + startLifetime);
+            }
+
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                lifetime = Mathf.Max(lifetime, trailRenderer.time);
+            }
+
+            return Mathf.Max(lifetime, 1f);
+        }
+
+        private static float GetCurveMaxValue(ParticleSystem.MinMaxCurve curve)
+        {
+            return curve.mode switch
+            {
+                ParticleSystemCurveMode.Constant => curve.constant,
+                ParticleSystemCurveMode.TwoConstants => curve.constantMax,
+                ParticleSystemCurveMode.Curve => curve.curve != null && curve.curve.length > 0
+                    ? curve.curve.keys[curve.curve.length - 1].time
+                    : curve.constant,
+                ParticleSystemCurveMode.TwoCurves => curve.curveMax != null && curve.curveMax.length > 0
+                    ? curve.curveMax.keys[curve.curveMax.length - 1].time
+                    : curve.constantMax,
+                _ => curve.constantMax,
+            };
         }
 
         private IEnumerator MoveRoutine(Vector3 target, float duration)

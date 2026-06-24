@@ -26,6 +26,7 @@ namespace Match3Foodie
         [SerializeField] private AudioClip mathCorrectAnswerClip;
         [SerializeField] private AudioClip mathWrongAnswerClip;
         [SerializeField] private AudioClip mathRewardArrivedClip;
+        [SerializeField] private AudioClip fallImpactClip;
 
         [Header("Volumes")]
         [SerializeField, Range(0f, 1f)] private float matchVolume = 1f;
@@ -38,6 +39,7 @@ namespace Match3Foodie
         [SerializeField, Range(0f, 1f)] private float mathCorrectAnswerVolume = 1f;
         [SerializeField, Range(0f, 1f)] private float mathWrongAnswerVolume = 1f;
         [SerializeField, Range(0f, 1f)] private float mathRewardArrivedVolume = 1f;
+        [SerializeField, Range(0f, 1f)] private float fallImpactVolume = 1f;
 
         [Header("Timer Tick")]
         [SerializeField, Min(0f)] private float timerTickThreshold = 10f;
@@ -76,6 +78,7 @@ namespace Match3Foodie
                 board.PiecesMatched.AddListener(HandlePiecesMatched);
                 board.PieceCleared.AddListener(HandlePieceCleared);
                 board.FinishPiecePopped.AddListener(HandleFinishPiecePopped);
+                board.FallImpact.AddListener(PlayFallImpact);
             }
 
             if (levelController != null)
@@ -125,6 +128,7 @@ namespace Match3Foodie
                 board.PiecesMatched.RemoveListener(HandlePiecesMatched);
                 board.PieceCleared.RemoveListener(HandlePieceCleared);
                 board.FinishPiecePopped.RemoveListener(HandleFinishPiecePopped);
+                board.FallImpact.RemoveListener(PlayFallImpact);
             }
 
             if (levelController != null)
@@ -200,7 +204,7 @@ namespace Match3Foodie
         {
             if (piece == null
                 || piece.Definition == null
-                || piece.Definition.SpecialEffectType != Match3SpecialEffectType.Fish)
+                || piece.SpecialEffectType != Match3SpecialEffectType.Fish)
             {
                 return;
             }
@@ -212,7 +216,7 @@ namespace Match3Foodie
         {
             if (piece != null
                 && piece.Definition != null
-                && piece.Definition.SpecialEffectType == Match3SpecialEffectType.Fish
+                && piece.SpecialEffectType == Match3SpecialEffectType.Fish
                 && fishMatchClip != null)
             {
                 Play(fishMatchClip, fishMatchVolume);
@@ -274,6 +278,11 @@ namespace Match3Foodie
         private void PlayMathRewardArrived(float secondsAdded)
         {
             Play(mathRewardArrivedClip, mathRewardArrivedVolume);
+        }
+
+        private void PlayFallImpact()
+        {
+            Play(fallImpactClip, fallImpactVolume);
         }
 
         private void Play(AudioClip clip, float volume)
@@ -388,6 +397,7 @@ namespace Match3Foodie
             LoadClip(mathCorrectAnswerClip);
             LoadClip(mathWrongAnswerClip);
             LoadClip(mathRewardArrivedClip);
+            LoadClip(fallImpactClip);
         }
 
         private static void LoadClip(AudioClip clip)

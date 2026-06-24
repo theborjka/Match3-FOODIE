@@ -1369,6 +1369,9 @@ MonoBehaviour:
   piecesMatched:
     m_PersistentCalls:
       m_Calls: []
+  fallImpact:
+    m_PersistentCalls:
+      m_Calls: []
   boardSettled:
     m_PersistentCalls:
       m_Calls: []
@@ -7629,6 +7632,7 @@ MonoBehaviour:
   mathCorrectAnswerClip: {fileID: 8300000, guid: 43d96471261ef3944ace30d2ecc1a7c4, type: 3}
   mathWrongAnswerClip: {fileID: 8300000, guid: 2aca2fb4b532f0d4f9fbf041e3f8ce87, type: 3}
   mathRewardArrivedClip: {fileID: 8300000, guid: 5bc38244ad5cf45d0a919174bbebd87b, type: 3}
+  fallImpactClip: {fileID: 8300000, guid: eabbacc3815f56941883750cc00f7b49, type: 3}
   matchVolume: 1
   fishMatchVolume: 1
   mathMiniGameStartVolume: 1
@@ -7639,6 +7643,7 @@ MonoBehaviour:
   mathCorrectAnswerVolume: 1
   mathWrongAnswerVolume: 1
   mathRewardArrivedVolume: 1
+  fallImpactVolume: 1
   timerTickThreshold: 10
   preloadClipsOnAwake: 1
   unlockAudioOnFirstInput: 1

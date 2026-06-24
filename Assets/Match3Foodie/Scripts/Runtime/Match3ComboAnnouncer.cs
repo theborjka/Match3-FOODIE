@@ -155,6 +155,8 @@ namespace Match3Foodie
 
         private readonly HashSet<int> announcedMilestones = new();
         private Coroutine shakeRoutine;
+        private Coroutine announcementRoutine;
+        private PopupInstance activePopup;
         private Vector2 shakeRootBasePosition;
         private int sequenceTotal;
 
@@ -184,6 +186,8 @@ namespace Match3Foodie
                 board.PiecesMatched.RemoveListener(ShowForMatchedPieces);
                 board.BoardSettled.RemoveListener(ResetSequence);
             }
+
+            StopActiveAnnouncement();
         }
 
         private void ShowForMatchedPieces(List<Match3PieceView> matchedPieces)
@@ -206,7 +210,8 @@ namespace Match3Foodie
             var count = milestone.Trigger == MilestoneTrigger.SingleMatchAtLeast ? currentCount : sequenceTotal;
             var uiPosition = GetPopupPosition(matchedPieces);
             var worldPosition = GetMatchedWorldCenter(matchedPieces);
-            StartCoroutine(AnnounceRoutine(milestone, count, uiPosition, worldPosition));
+            StopActiveAnnouncement();
+            announcementRoutine = StartCoroutine(AnnounceRoutine(milestone, count, uiPosition, worldPosition));
         }
 
         private IEnumerator AnnounceRoutine(
@@ -218,9 +223,11 @@ namespace Match3Foodie
             var popup = CreatePopup(milestone, count, shownPosition);
             if (popup == null)
             {
+                announcementRoutine = null;
                 yield break;
             }
 
+            activePopup = popup;
             PlayVfx(shownPosition, worldPosition, milestone.VfxPrefab);
             PlayShake(milestone.ShakeStrength);
             announced.Invoke(count);
@@ -237,6 +244,32 @@ namespace Match3Foodie
             if (popup.Root != null)
             {
                 Destroy(popup.Root.gameObject);
+            }
+
+            if (activePopup == popup)
+            {
+                activePopup = null;
+            }
+
+            announcementRoutine = null;
+        }
+
+        private void StopActiveAnnouncement()
+        {
+            if (announcementRoutine != null)
+            {
+                StopCoroutine(announcementRoutine);
+                announcementRoutine = null;
+            }
+
+            if (activePopup != null)
+            {
+                if (activePopup.Root != null)
+                {
+                    Destroy(activePopup.Root.gameObject);
+                }
+
+                activePopup = null;
             }
         }
 
@@ -496,6 +529,7 @@ namespace Match3Foodie
             var parent = uiVfxParent != null ? uiVfxParent : popupParent;
             var instance = Instantiate(prefab, parent);
             instance.SetActive(false);
+            ClearVisualState(instance);
 
             if (instance.transform is RectTransform vfxRect)
             {
@@ -518,7 +552,6 @@ namespace Match3Foodie
             }
 
             instance.SetActive(true);
-            ClearVisualState(instance);
             PlayParticles(instance);
             DestroyAfterLifetime(instance);
         }
@@ -530,10 +563,11 @@ namespace Match3Foodie
             var instance = worldVfxParent != null
                 ? Instantiate(prefab, position, rotation, worldVfxParent)
                 : Instantiate(prefab, position, rotation);
+            instance.SetActive(false);
             instance.transform.localScale = prefab.transform.localScale;
-            instance.SetActive(true);
-
             ClearVisualState(instance);
+
+            instance.SetActive(true);
             PlayParticles(instance);
             DestroyAfterLifetime(instance);
         }
@@ -542,19 +576,28 @@ namespace Match3Foodie
         {
             foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
             {
+                particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 particleSystem.Clear(true);
             }
 
             foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
             {
+                trailRenderer.emitting = false;
                 trailRenderer.Clear();
             }
         }
 
         private void PlayParticles(GameObject instance)
         {
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.Clear();
+                trailRenderer.emitting = true;
+            }
+
             foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
             {
+                particleSystem.Clear(true);
                 particleSystem.Play(true);
             }
         }
@@ -642,6 +685,7 @@ namespace Match3Foodie
         {
             sequenceTotal = 0;
             announcedMilestones.Clear();
+            StopActiveAnnouncement();
         }
 
         private void ConfigureText(TMP_Text text, Color color)

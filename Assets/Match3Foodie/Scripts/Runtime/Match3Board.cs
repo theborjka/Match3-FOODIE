@@ -59,6 +59,7 @@ namespace Match3Foodie
         [SerializeField] private PieceEvent pieceCleared = new();
         [SerializeField] private PieceEvent finishPiecePopped = new();
         [SerializeField] private PiecesEvent piecesMatched = new();
+        [SerializeField] private UnityEvent fallImpact = new();
         [SerializeField] private UnityEvent boardSettled = new();
 
         private Match3PieceView[,] pieces;
@@ -84,6 +85,21 @@ namespace Match3Foodie
             public float Order { get; }
         }
 
+        private readonly struct CreatedSpecial
+        {
+            public CreatedSpecial(Match3PieceView piece, Match3SpecialEffectType effectType, Match3LineClearDirection direction)
+            {
+                Piece = piece;
+                EffectType = effectType;
+                Direction = direction;
+            }
+
+            public Match3PieceView Piece { get; }
+            public Match3SpecialEffectType EffectType { get; }
+            public Match3LineClearDirection Direction { get; }
+            public bool IsValid => Piece != null && EffectType != Match3SpecialEffectType.None;
+        }
+
         public Match3BoardSettings Settings => settings;
         public bool IsResolving => isResolving;
         public PieceEvent PieceSelected => pieceSelected;
@@ -91,6 +107,7 @@ namespace Match3Foodie
         public PieceEvent PieceCleared => pieceCleared;
         public PieceEvent FinishPiecePopped => finishPiecePopped;
         public PiecesEvent PiecesMatched => piecesMatched;
+        public UnityEvent FallImpact => fallImpact;
         public UnityEvent BoardSettled => boardSettled;
         public int Width => settings != null ? settings.Width : 0;
         public int Height => settings != null ? settings.Height : 0;
@@ -690,10 +707,18 @@ namespace Match3Foodie
         {
             while (matches.Count > 0)
             {
+                var createdSpecial = FindCreatedSpecial(matches);
                 yield return ResolveSpecialEffectsRoutine(matches);
 
-            var matchedPieces = new List<Match3PieceView>(matches);
-            piecesMatched.Invoke(matchedPieces);
+                var matchedPieces = new List<Match3PieceView>(matches);
+                var matchEventPieces = new List<Match3PieceView>(matchedPieces);
+                if (createdSpecial.IsValid && IsPieceInCurrentGridCell(createdSpecial.Piece))
+                {
+                    matchedPieces.Remove(createdSpecial.Piece);
+                    createdSpecial.Piece.SetCreatedSpecial(createdSpecial.EffectType, createdSpecial.Direction);
+                }
+
+                piecesMatched.Invoke(matchEventPieces);
 
                 yield return ClearPiecesRoutine(matchedPieces);
                 yield return new WaitForSeconds(settings.ClearDelay);
@@ -812,13 +837,21 @@ namespace Match3Foodie
             }
 
             var visual = Instantiate(visualPrefab);
-            visual.SetActive(true);
+            visual.SetActive(false);
             visual.transform.position = WorldPosition(startPiece.GridPosition);
 
             var trailRenderers = visual.GetComponentsInChildren<TrailRenderer>(true);
             foreach (var trailRenderer in trailRenderers)
             {
+                trailRenderer.emitting = false;
                 trailRenderer.Clear();
+            }
+
+            visual.SetActive(true);
+            foreach (var trailRenderer in trailRenderers)
+            {
+                trailRenderer.Clear();
+                trailRenderer.emitting = true;
             }
 
             return visual;
@@ -852,7 +885,7 @@ namespace Match3Foodie
 
             piecesMatched.Invoke(new List<Match3PieceView> { piece });
 
-            if (piece.Definition != null && piece.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+            if (piece.SpecialEffectType == Match3SpecialEffectType.Fish)
             {
                 ClearPieceFromGrid(piece);
                 specialRoutines.Add(StartCoroutine(ResolveFishEffectNonBlockingRoutine(piece, clearSet)));
@@ -901,7 +934,7 @@ namespace Match3Foodie
                     continue;
                 }
 
-                if (piece.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+                if (piece.SpecialEffectType == Match3SpecialEffectType.Fish)
                 {
                     fishRoutines.Add(StartCoroutine(ResolveFishEffectRoutine(piece, matches)));
                 }
@@ -973,7 +1006,7 @@ namespace Match3Foodie
 
             ClearPieceFromGrid(target);
 
-            if (target.Definition != null && target.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+            if (target.SpecialEffectType == Match3SpecialEffectType.Fish)
             {
                 matches.Add(target);
                 yield return ResolveFishEffectRoutine(target, matches);
@@ -992,13 +1025,13 @@ namespace Match3Foodie
                 return false;
             }
 
-            switch (specialPiece.Definition.SpecialEffectType)
+            switch (specialPiece.SpecialEffectType)
             {
                 case Match3SpecialEffectType.Bomb:
-                    AddBombTargets(specialPiece.GridPosition, specialPiece.Definition.BombRadius, targets);
+                    AddBombTargets(specialPiece.GridPosition, specialPiece.BombRadius, targets);
                     return true;
                 case Match3SpecialEffectType.Line:
-                    AddLineTargets(specialPiece.GridPosition, specialPiece.Definition.LineClearDirection, targets);
+                    AddLineTargets(specialPiece.GridPosition, specialPiece.LineClearDirection, targets);
                     return true;
                 case Match3SpecialEffectType.CrossLine:
                     AddLineTargets(specialPiece.GridPosition, Match3LineClearDirection.Horizontal, targets);
@@ -1115,7 +1148,7 @@ namespace Match3Foodie
 
             ClearPieceFromGrid(target);
 
-            if (target.Definition != null && target.Definition.SpecialEffectType == Match3SpecialEffectType.Fish)
+            if (target.SpecialEffectType == Match3SpecialEffectType.Fish)
             {
                 yield return ResolveFishEffectNonBlockingRoutine(target, matches);
                 yield break;
@@ -1432,6 +1465,17 @@ namespace Match3Foodie
             }
         }
 
+        private bool IsPieceInCurrentGridCell(Match3PieceView piece)
+        {
+            if (piece == null)
+            {
+                return false;
+            }
+
+            var position = piece.GridPosition;
+            return IsInside(position) && pieces[position.X, position.Y] == piece;
+        }
+
         private IEnumerator CollapseColumnsRoutine()
         {
             var longestDuration = 0f;
@@ -1439,6 +1483,7 @@ namespace Match3Foodie
             for (var x = 0; x < settings.Width; x++)
             {
                 var writeY = 0;
+                var columnImpactDelay = -1f;
                 for (var readY = 0; readY < settings.Height; readY++)
                 {
                     var piece = pieces[x, readY];
@@ -1457,10 +1502,16 @@ namespace Match3Foodie
                         var duration = Mathf.Max(settings.FallDurationPerCell * distance, settings.FallDurationPerCell);
                         piece.SetGridPosition(target);
                         piece.FallTo(WorldPosition(target), duration, settings.FallImpactBounceDistance, settings.FallImpactBounceDuration);
+                        columnImpactDelay = Mathf.Max(columnImpactDelay, duration);
                         longestDuration = Mathf.Max(longestDuration, duration + settings.FallImpactBounceDuration);
                     }
 
                     writeY++;
+                }
+
+                if (columnImpactDelay >= 0f)
+                {
+                    StartCoroutine(InvokeFallImpactAfterDelay(columnImpactDelay));
                 }
             }
 
@@ -1477,6 +1528,7 @@ namespace Match3Foodie
             for (var x = 0; x < settings.Width; x++)
             {
                 var missing = 0;
+                var columnImpactDelay = -1f;
                 for (var y = 0; y < settings.Height; y++)
                 {
                     if (pieces[x, y] != null)
@@ -1501,8 +1553,14 @@ namespace Match3Foodie
                         settings.RefillPopScale,
                         settings.FallImpactBounceDistance,
                         settings.FallImpactBounceDuration);
+                    columnImpactDelay = Mathf.Max(columnImpactDelay, delay + duration);
                     longestDuration = Mathf.Max(longestDuration, duration + delay + settings.FallImpactBounceDuration);
                     missing++;
+                }
+
+                if (columnImpactDelay >= 0f)
+                {
+                    StartCoroutine(InvokeFallImpactAfterDelay(columnImpactDelay));
                 }
             }
 
@@ -1510,6 +1568,16 @@ namespace Match3Foodie
             {
                 yield return new WaitForSeconds(longestDuration);
             }
+        }
+
+        private IEnumerator InvokeFallImpactAfterDelay(float delay)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            fallImpact.Invoke();
         }
 
         private HashSet<Match3PieceView> FindMatches()
@@ -1542,6 +1610,214 @@ namespace Match3Foodie
             }
 
             return matches;
+        }
+
+        private CreatedSpecial FindCreatedSpecial(HashSet<Match3PieceView> matches)
+        {
+            if (matches == null || matches.Count == 0)
+            {
+                return default;
+            }
+
+            if (TryFindCrossCreatedSpecial(matches, out var crossSpecial))
+            {
+                return crossSpecial;
+            }
+
+            if (TryFindSquareCreatedSpecial(matches, out var bombSpecial))
+            {
+                return bombSpecial;
+            }
+
+            if (TryFindLineCreatedSpecial(matches, true, out var horizontalSpecial))
+            {
+                return horizontalSpecial;
+            }
+
+            if (TryFindLineCreatedSpecial(matches, false, out var verticalSpecial))
+            {
+                return verticalSpecial;
+            }
+
+            return default;
+        }
+
+        private bool TryFindCrossCreatedSpecial(HashSet<Match3PieceView> matches, out CreatedSpecial createdSpecial)
+        {
+            for (var y = 0; y < settings.Height; y++)
+            {
+                for (var x = 0; x < settings.Width; x++)
+                {
+                    var center = pieces[x, y];
+                    if (!CanBecomeCreatedSpecial(center) || !matches.Contains(center))
+                    {
+                        continue;
+                    }
+
+                    if (IsMatchedSameDefinition(center, x - 1, y, matches)
+                        && IsMatchedSameDefinition(center, x + 1, y, matches)
+                        && IsMatchedSameDefinition(center, x, y - 1, matches)
+                        && IsMatchedSameDefinition(center, x, y + 1, matches))
+                    {
+                        createdSpecial = new CreatedSpecial(center, Match3SpecialEffectType.CrossLine, Match3LineClearDirection.Horizontal);
+                        return true;
+                    }
+                }
+            }
+
+            createdSpecial = default;
+            return false;
+        }
+
+        private bool TryFindSquareCreatedSpecial(HashSet<Match3PieceView> matches, out CreatedSpecial createdSpecial)
+        {
+            for (var y = 0; y < settings.Height - 1; y++)
+            {
+                for (var x = 0; x < settings.Width - 1; x++)
+                {
+                    var origin = pieces[x, y];
+                    if (origin == null)
+                    {
+                        continue;
+                    }
+
+                    var square = new[]
+                    {
+                        origin,
+                        pieces[x + 1, y],
+                        pieces[x, y + 1],
+                        pieces[x + 1, y + 1],
+                    };
+
+                    if (!AllMatchedSameDefinition(origin, square, matches))
+                    {
+                        continue;
+                    }
+
+                    var creator = PickCreator(square);
+                    if (creator != null)
+                    {
+                        createdSpecial = new CreatedSpecial(creator, Match3SpecialEffectType.Bomb, Match3LineClearDirection.Horizontal);
+                        return true;
+                    }
+                }
+            }
+
+            createdSpecial = default;
+            return false;
+        }
+
+        private bool TryFindLineCreatedSpecial(HashSet<Match3PieceView> matches, bool horizontal, out CreatedSpecial createdSpecial)
+        {
+            var outerLimit = horizontal ? settings.Height : settings.Width;
+            var innerLimit = horizontal ? settings.Width : settings.Height;
+            for (var outer = 0; outer < outerLimit; outer++)
+            {
+                var runStart = 0;
+                for (var inner = 1; inner <= innerLimit; inner++)
+                {
+                    var runStartPiece = horizontal ? pieces[runStart, outer] : pieces[outer, runStart];
+                    var currentPiece = inner < innerLimit
+                        ? (horizontal ? pieces[inner, outer] : pieces[outer, inner])
+                        : null;
+
+                    if (inner < innerLimit && SameDefinition(runStartPiece, currentPiece))
+                    {
+                        continue;
+                    }
+
+                    var length = inner - runStart;
+                    if (length >= 4 && TryPickLineCreator(matches, horizontal, outer, runStart, length, out var creator))
+                    {
+                        var direction = horizontal ? Match3LineClearDirection.Horizontal : Match3LineClearDirection.Vertical;
+                        createdSpecial = new CreatedSpecial(creator, Match3SpecialEffectType.Line, direction);
+                        return true;
+                    }
+
+                    runStart = inner;
+                }
+            }
+
+            createdSpecial = default;
+            return false;
+        }
+
+        private bool TryPickLineCreator(
+            HashSet<Match3PieceView> matches,
+            bool horizontal,
+            int outer,
+            int runStart,
+            int length,
+            out Match3PieceView creator)
+        {
+            var linePieces = new Match3PieceView[length];
+            for (var i = 0; i < length; i++)
+            {
+                var piece = horizontal ? pieces[runStart + i, outer] : pieces[outer, runStart + i];
+                if (piece == null || !matches.Contains(piece))
+                {
+                    creator = null;
+                    return false;
+                }
+
+                linePieces[i] = piece;
+            }
+
+            creator = PickCreator(linePieces);
+            return creator != null;
+        }
+
+        private bool IsMatchedSameDefinition(Match3PieceView origin, int x, int y, HashSet<Match3PieceView> matches)
+        {
+            if (x < 0 || x >= settings.Width || y < 0 || y >= settings.Height)
+            {
+                return false;
+            }
+
+            var piece = pieces[x, y];
+            return piece != null && matches.Contains(piece) && SameDefinition(origin, piece);
+        }
+
+        private bool AllMatchedSameDefinition(Match3PieceView origin, IReadOnlyList<Match3PieceView> candidates, HashSet<Match3PieceView> matches)
+        {
+            foreach (var piece in candidates)
+            {
+                if (piece == null || !matches.Contains(piece) || !SameDefinition(origin, piece))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static Match3PieceView PickCreator(IReadOnlyList<Match3PieceView> piecesToChoose)
+        {
+            var centerIndex = piecesToChoose.Count / 2;
+            for (var offset = 0; offset < piecesToChoose.Count; offset++)
+            {
+                var right = centerIndex + offset;
+                if (right < piecesToChoose.Count && CanBecomeCreatedSpecial(piecesToChoose[right]))
+                {
+                    return piecesToChoose[right];
+                }
+
+                var left = centerIndex - offset;
+                if (left >= 0 && CanBecomeCreatedSpecial(piecesToChoose[left]))
+                {
+                    return piecesToChoose[left];
+                }
+            }
+
+            return null;
+        }
+
+        private static bool CanBecomeCreatedSpecial(Match3PieceView piece)
+        {
+            return piece != null
+                && piece.Definition != null
+                && piece.SpecialEffectType == Match3SpecialEffectType.None
+                && piece.Definition.SpecialEffectType == Match3SpecialEffectType.None;
         }
 
         private void FindLineMatches(HashSet<Match3PieceView> matches)

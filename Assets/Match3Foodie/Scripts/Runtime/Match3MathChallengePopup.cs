@@ -582,6 +582,7 @@ namespace Match3Foodie
                 return;
             }
 
+            ClearRewardVfx(instance);
             instance.SetActive(true);
             PlayRewardVfx(instance);
 
@@ -597,6 +598,7 @@ namespace Match3Foodie
             var instance = parent != null
                 ? Instantiate(rewardVfxPrefab, parent, false)
                 : Instantiate(rewardVfxPrefab);
+            instance.SetActive(false);
 
             instance.transform.SetAsLastSibling();
 
@@ -620,6 +622,7 @@ namespace Match3Foodie
             }
 
             var instance = Instantiate(rewardVfxPrefab);
+            instance.SetActive(false);
             var screenPosition = RectTransformUtility.WorldToScreenPoint(GetRewardTextCanvasCamera(), rewardAnnouncerText.transform.position);
             var worldPosition = camera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, rewardWorldVfxCameraDistance));
             instance.transform.position = worldPosition + rewardWorldVfxOffset;
@@ -660,10 +663,30 @@ namespace Match3Foodie
             }
         }
 
+        private static void ClearRewardVfx(GameObject instance)
+        {
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particleSystem.Clear(true);
+            }
+
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.emitting = false;
+                trailRenderer.Clear();
+            }
+        }
+
         private static void PlayRewardVfx(GameObject instance)
         {
-            var particleSystems = instance.GetComponentsInChildren<ParticleSystem>(true);
-            foreach (var particleSystem in particleSystems)
+            foreach (var trailRenderer in instance.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                trailRenderer.Clear();
+                trailRenderer.emitting = true;
+            }
+
+            foreach (var particleSystem in instance.GetComponentsInChildren<ParticleSystem>(true))
             {
                 particleSystem.Clear(true);
                 particleSystem.Play(true);

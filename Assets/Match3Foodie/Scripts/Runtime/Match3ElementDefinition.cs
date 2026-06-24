@@ -34,6 +34,12 @@ namespace Match3Foodie
         [SerializeField, Min(0)] private int bombRadius = 1;
         [SerializeField] private Match3LineClearDirection lineClearDirection = Match3LineClearDirection.Horizontal;
 
+        [Header("Created Special Variations")]
+        [SerializeField] private Sprite bombSprite;
+        [SerializeField] private Sprite horizontalLineSprite;
+        [SerializeField] private Sprite verticalLineSprite;
+        [SerializeField] private Sprite crossLineSprite;
+
         public string ElementId => elementId;
         public Sprite Sprite => sprite;
         public Color Tint => tint;
@@ -44,5 +50,19 @@ namespace Match3Foodie
         public float MathBonusSeconds => mathBonusSeconds;
         public int BombRadius => Mathf.Max(0, bombRadius);
         public Match3LineClearDirection LineClearDirection => lineClearDirection;
+
+        public Sprite GetSpriteForSpecial(Match3SpecialEffectType effectType, Match3LineClearDirection direction)
+        {
+            return effectType switch
+            {
+                Match3SpecialEffectType.Bomb => bombSprite != null ? bombSprite : sprite,
+                Match3SpecialEffectType.Line when direction == Match3LineClearDirection.Vertical =>
+                    verticalLineSprite != null ? verticalLineSprite : sprite,
+                Match3SpecialEffectType.Line =>
+                    horizontalLineSprite != null ? horizontalLineSprite : sprite,
+                Match3SpecialEffectType.CrossLine => crossLineSprite != null ? crossLineSprite : sprite,
+                _ => sprite,
+            };
+        }
     }
 }
